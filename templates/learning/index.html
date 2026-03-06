@@ -391,11 +391,7 @@ function generateKnowledge() {
     var resultDiv = document.getElementById('gen_result');
     resultDiv.style.display = 'none';
 
-    fetch('/api/ai-assistant/chat', {
-        // 实际用 learning/generate 端点
-    });
-
-    // 调用学习中心生成接口
+    // 调用学习中心AI批量生成接口
     fetch('/learning/generate', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},

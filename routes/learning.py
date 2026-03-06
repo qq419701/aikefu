@@ -191,7 +191,7 @@ def generate_knowledge():
     返回：JSON格式结果
     """
     data = request.get_json() or {}
-    industry_id = data.get('industry_id', type(0)) or data.get('industry_id')
+    industry_id = int(data.get('industry_id') or 0) or None
     topic = data.get('topic', '').strip()
     count = min(int(data.get('count', 10)), 20)  # 最多20条
 

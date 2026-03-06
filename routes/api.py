@@ -174,7 +174,7 @@ def ai_assistant_chat():
     try:
         data = request.get_json() or {}
         question = data.get('question', '').strip()
-        industry_id = data.get('industry_id', type(0)) or data.get('industry_id')
+        industry_id = int(data.get('industry_id') or 0) or None
 
         if not question:
             return jsonify({'success': False, 'message': '问题不能为空'})

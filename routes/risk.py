@@ -57,7 +57,7 @@ def index():
         RefundRecord.industry_id,
         func.count(RefundRecord.id).label('refund_count'),
         func.sum(RefundRecord.refund_amount).label('total_amount'),
-    ).filter(RefundRecord.is_malicious == True)
+    ).filter(RefundRecord.is_malicious)
 
     if industry_id:
         rf_query = rf_query.filter(RefundRecord.industry_id == industry_id)
@@ -69,8 +69,6 @@ def index():
     malicious_stats = rf_query.group_by(
         RefundRecord.buyer_id, RefundRecord.buyer_name, RefundRecord.industry_id
     ).order_by(func.count(RefundRecord.id).desc()).limit(10).all()
-
-    # 各等级黑名单数量统计
     level_stats = {
         'level1': bl_query.filter(Blacklist.level == 1).count(),
         'level2': bl_query.filter(Blacklist.level == 2).count(),
@@ -90,7 +88,7 @@ def index():
 
     refund_stats = {
         'month_total': rf_month_query.count(),
-        'month_malicious': rf_month_query.filter(RefundRecord.is_malicious == True).count(),
+        'month_malicious': rf_month_query.filter(RefundRecord.is_malicious).count(),
         'month_rejected': rf_month_query.filter(
             RefundRecord.status.in_(['rejected', 'ai_rejected'])
         ).count(),

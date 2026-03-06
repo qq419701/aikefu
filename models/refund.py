@@ -88,7 +88,7 @@ class RefundRecord(db.Model):
         """
         import config
         from datetime import timedelta
-        if not self.deadline_at or self.status not in ('pending',):
+        if not self.deadline_at or self.status != 'pending':
             return False
         now = get_beijing_time()
         threshold = timedelta(hours=config.REFUND_URGENT_HOURS)
