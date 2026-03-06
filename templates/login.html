@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}登录 - {{ system_name }}{% endblock %}
+
+{% block auth_content %}
+<div class="min-vh-100 d-flex align-items-center justify-content-center"
+     style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);">
+    <div class="card shadow-lg border-0" style="width: 400px; border-radius: 16px;">
+        <div class="card-body p-5">
+            <!-- 品牌标志 -->
+            <div class="text-center mb-4">
+                <div style="font-size: 3rem;">🤖</div>
+                <h4 class="fw-bold mt-2">爱客服AI智能客服</h4>
+                <p class="text-muted small">多行业 · 多店铺 · 全自动</p>
+            </div>
+            
+            <!-- 登录表单 -->
+            <form method="POST" action="{{ url_for('auth.login') }}">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-sm py-2">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">用户名</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-person"></i></span>
+                        <input type="text" class="form-control" name="username"
+                               placeholder="请输入用户名" required autofocus>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="form-label fw-semibold">密码</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                        <input type="password" class="form-control" name="password"
+                               placeholder="请输入密码" required>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+                    <i class="bi bi-box-arrow-in-right"></i> 登 录
+                </button>
+            </form>
+            
+            <div class="text-center mt-4">
+                <small class="text-muted">
+                    默认账号：admin / admin123<br>
+                    <span class="text-danger">请登录后立即修改密码！</span>
+                </small>
+            </div>
+        </div>
+        
+        <div class="card-footer text-center py-3 bg-light border-0" 
+             style="border-radius: 0 0 16px 16px;">
+            <small class="text-muted">
+                {{ system_name }} {{ system_version }} · 北京时间驱动
+            </small>
+        </div>
+    </div>
+</div>
+{% endblock %}

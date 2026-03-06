@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}编辑店铺{% endblock %}
+{% block page_title %}编辑店铺：{{ shop.name }}{% endblock %}
+{% block page_subtitle %}修改店铺配置和API设置{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm" style="max-width: 750px;">
+    <div class="card-body p-4">
+        <form method="POST">
+            <div class="row g-3">
+                <div class="col-md-8">
+                    <label class="form-label fw-semibold">店铺名称</label>
+                    <input type="text" class="form-control" name="name" value="{{ shop.name }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">所属行业</label>
+                    <input type="text" class="form-control bg-light"
+                           value="{{ shop.industry.icon + ' ' + shop.industry.name if shop.industry else '未知' }}" readonly>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">电商平台</label>
+                    <select class="form-select" name="platform">
+                        <option value="pdd" {% if shop.platform == 'pdd' %}selected{% endif %}>拼多多</option>
+                        <option value="taobao" {% if shop.platform == 'taobao' %}selected{% endif %}>淘宝</option>
+                        <option value="jd" {% if shop.platform == 'jd' %}selected{% endif %}>京东</option>
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label fw-semibold">平台店铺ID</label>
+                    <input type="text" class="form-control" name="platform_shop_id" value="{{ shop.platform_shop_id }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Client ID（AppKey）</label>
+                    <input type="text" class="form-control" name="client_id" value="{{ shop.client_id }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Client Secret（留空不修改）</label>
+                    <input type="password" class="form-control" name="client_secret" placeholder="不修改请留空">
+                </div>
+                
+                <!-- 功能开关 -->
+                <div class="col-12">
+                    <div class="d-flex gap-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="auto_reply_enabled"
+                                   id="auto_reply" {% if shop.auto_reply_enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="auto_reply">自动回复</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="auto_exchange_enabled"
+                                   id="auto_exchange" {% if shop.auto_exchange_enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="auto_exchange">自动换号</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">u号租账号</label>
+                    <input type="text" class="form-control" name="uzuzu_account" value="{{ shop.uzuzu_account }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">u号租密码（留空不修改）</label>
+                    <input type="password" class="form-control" name="uzuzu_password" placeholder="不修改请留空">
+                </div>
+                
+                <div class="col-12">
+                    <label class="form-label fw-semibold">自定义AI提示词（覆盖行业默认）</label>
+                    <textarea class="form-control" name="custom_prompt" rows="4"
+                              placeholder="留空则使用行业默认提示词">{{ shop.custom_prompt }}</textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">备注</label>
+                    <input type="text" class="form-control" name="note" value="{{ shop.note }}">
+                </div>
+            </div>
+            
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> 保存修改
+                </button>
+                <a href="{{ url_for('shop.index') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

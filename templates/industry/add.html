@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}添加行业{% endblock %}
+{% block page_title %}添加行业{% endblock %}
+{% block page_subtitle %}新增一个行业分类，各行业独立管理{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm" style="max-width: 700px;">
+    <div class="card-body p-4">
+        <form method="POST">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">行业代码 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="code" required
+                           placeholder="如：game_rental, ecommerce"
+                           pattern="[a-z_]+" title="只允许小写字母和下划线">
+                    <div class="form-text">唯一标识，只允许小写字母和下划线</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">行业名称 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="name" required placeholder="如：游戏租号">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">行业图标</label>
+                    <input type="text" class="form-control" name="icon" value="🏢" placeholder="Emoji图标">
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label fw-semibold">主要平台</label>
+                    <select class="form-select" name="platform">
+                        <option value="pdd">拼多多</option>
+                        <option value="taobao">淘宝</option>
+                        <option value="jd">京东</option>
+                        <option value="general" selected>通用</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">行业描述</label>
+                    <textarea class="form-control" name="description" rows="2"
+                              placeholder="简单描述该行业的业务场景"></textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">AI系统提示词</label>
+                    <textarea class="form-control" name="ai_system_prompt" rows="6"
+                              placeholder="设置该行业的AI角色和回复风格，例如：&#10;你是专业的游戏账号租赁客服，服务于拼多多平台。&#10;你的职责是：&#10;1. 解答买家关于游戏账号租赁的问题&#10;2. 处理换号请求&#10;3. 解释退款政策&#10;请用简洁、友好的语气回复，每次回复不超过100字。"></textarea>
+                    <div class="form-text">该提示词定义AI的角色和回复风格，各行业独立设置</div>
+                </div>
+            </div>
+            
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> 保存行业
+                </button>
+                <a href="{{ url_for('industry.index') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

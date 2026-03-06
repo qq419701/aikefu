@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ system_name }}{% endblock %}</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- 自定义样式 -->
+    <style>
+        /* 侧边栏样式 */
+        body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+        .sidebar {
+            width: 240px;
+            min-height: 100vh;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 100;
+            overflow-y: auto;
+        }
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.75);
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            margin: 2px 8px;
+            transition: all 0.2s;
+        }
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            color: #fff;
+            background: rgba(255,255,255,0.15);
+        }
+        .sidebar .nav-link i { margin-right: 8px; }
+        .sidebar-brand {
+            padding: 1.2rem 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .sidebar-brand h5 { color: #fff; font-size: 1rem; margin: 0; }
+        .sidebar-brand small { color: rgba(255,255,255,0.5); font-size: 0.75rem; }
+        
+        /* 主内容区 */
+        .main-content {
+            margin-left: 240px;
+            padding: 1.5rem;
+            min-height: 100vh;
+            background: #f8f9fa;
+        }
+        
+        /* 顶部导航栏 */
+        .topbar {
+            background: #fff;
+            padding: 0.75rem 1.5rem;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        /* 统计卡片 */
+        .stat-card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            transition: transform 0.2s;
+        }
+        .stat-card:hover { transform: translateY(-2px); }
+        
+        /* 情绪级别徽章颜色 */
+        .emotion-0 { background-color: #198754; }
+        .emotion-1 { background-color: #ffc107; color: #000; }
+        .emotion-2 { background-color: #fd7e14; }
+        .emotion-3 { background-color: #dc3545; }
+        .emotion-4 { background-color: #6f42c1; }
+        
+        /* 处理方式标签 */
+        .badge-rule { background-color: #0dcaf0; }
+        .badge-knowledge { background-color: #198754; }
+        .badge-ai { background-color: #6610f2; }
+        .badge-human { background-color: #dc3545; }
+        
+        /* 侧边栏分组标题 */
+        .sidebar-heading {
+            color: rgba(255,255,255,0.4);
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 0.75rem 1.5rem 0.25rem;
+        }
+        
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .sidebar { width: 100%; min-height: auto; position: relative; }
+            .main-content { margin-left: 0; }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+{% if current_user.is_authenticated %}
+    <!-- 侧边导航栏 -->
+    <nav class="sidebar d-flex flex-column">
+        <!-- 品牌标志 -->
+        <div class="sidebar-brand">
+            <h5>🤖 {{ system_name }}</h5>
+            <small>{{ system_version }} · 北京时间</small>
+        </div>
+        
+        <!-- 导航菜单 -->
+        <ul class="nav flex-column py-3 flex-grow-1">
+            <!-- 主要功能 -->
+            <div class="sidebar-heading">主要功能</div>
+            
+            <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}"
+                   href="{{ url_for('dashboard.index') }}">
+                    <i class="bi bi-speedometer2"></i>控制面板
+                </a>
+            </li>
+            
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'messages' %}active{% endif %}"
+                   href="{{ url_for('messages.index') }}">
+                    <i class="bi bi-chat-dots"></i>消息管理
+                    <span id="pending-badge" class="badge bg-danger ms-auto" style="display:none"></span>
+                </a>
+            </li>
+            
+            <!-- 配置管理 -->
+            <div class="sidebar-heading mt-2">配置管理</div>
+            
+            {% if current_user.is_admin() %}
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'industry' %}active{% endif %}"
+                   href="{{ url_for('industry.index') }}">
+                    <i class="bi bi-grid-3x3-gap"></i>行业管理
+                </a>
+            </li>
+            {% endif %}
+            
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'shop' %}active{% endif %}"
+                   href="{{ url_for('shop.index') }}">
+                    <i class="bi bi-shop"></i>店铺管理
+                </a>
+            </li>
+            
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'rules' %}active{% endif %}"
+                   href="{{ url_for('rules.index') }}">
+                    <i class="bi bi-lightning-charge"></i>规则引擎
+                </a>
+            </li>
+            
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'knowledge' %}active{% endif %}"
+                   href="{{ url_for('knowledge.index') }}">
+                    <i class="bi bi-book"></i>知识库
+                </a>
+            </li>
+            
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'blacklist' %}active{% endif %}"
+                   href="{{ url_for('blacklist.index') }}">
+                    <i class="bi bi-slash-circle"></i>黑名单
+                </a>
+            </li>
+            
+            <!-- 数据分析 -->
+            <div class="sidebar-heading mt-2">数据分析</div>
+            
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'stats' %}active{% endif %}"
+                   href="{{ url_for('stats.index') }}">
+                    <i class="bi bi-bar-chart-line"></i>统计报表
+                </a>
+            </li>
+        </ul>
+        
+        <!-- 底部用户信息 -->
+        <div class="border-top border-secondary p-3">
+            <div class="d-flex align-items-center">
+                <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center"
+                     style="width:36px;height:36px;flex-shrink:0;">
+                    <i class="bi bi-person text-white"></i>
+                </div>
+                <div class="ms-2 overflow-hidden">
+                    <div class="text-white text-truncate" style="font-size:0.85rem;">
+                        {{ current_user.display_name or current_user.username }}
+                    </div>
+                    <div class="text-muted" style="font-size:0.7rem;">
+                        {% if current_user.is_admin() %}超级管理员{% else %}操作员{% endif %}
+                    </div>
+                </div>
+                <div class="ms-auto">
+                    <a href="{{ url_for('auth.logout') }}" class="text-muted" title="退出登录">
+                        <i class="bi bi-box-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- 主内容区 -->
+    <div class="main-content">
+        <!-- 顶部栏 -->
+        <div class="topbar">
+            <div>
+                <h6 class="mb-0 fw-semibold">{% block page_title %}{% endblock %}</h6>
+                <small class="text-muted">{% block page_subtitle %}{% endblock %}</small>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <small class="text-muted">
+                    <i class="bi bi-clock"></i>
+                    北京时间：<span id="clock">{{ now.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+                </small>
+                <a href="{{ url_for('auth.change_password') }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-key"></i> 修改密码
+                </a>
+            </div>
+        </div>
+        
+        <!-- Flash 消息提示 -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show mb-3" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <!-- 页面主体内容 -->
+        {% block content %}{% endblock %}
+    </div>
+
+{% else %}
+    <!-- 未登录：直接显示内容（登录页） -->
+    {% block auth_content %}{% endblock %}
+{% endif %}
+
+<!-- Bootstrap 5 JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- 实时时钟（北京时间） -->
+<script>
+function updateClock() {
+    var el = document.getElementById('clock');
+    if (!el) return;
+    var now = new Date();
+    // 转换为北京时间（UTC+8）
+    var utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    var beijing = new Date(utc + 8 * 3600000);
+    var str = beijing.getFullYear() + '-' +
+        String(beijing.getMonth()+1).padStart(2,'0') + '-' +
+        String(beijing.getDate()).padStart(2,'0') + ' ' +
+        String(beijing.getHours()).padStart(2,'0') + ':' +
+        String(beijing.getMinutes()).padStart(2,'0') + ':' +
+        String(beijing.getSeconds()).padStart(2,'0');
+    el.textContent = str;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// 定时获取待处理消息数量
+function updatePendingBadge() {
+    fetch('/messages/api/stats')
+        .then(r => r.json())
+        .then(data => {
+            var badge = document.getElementById('pending-badge');
+            if (badge) {
+                if (data.pending > 0) {
+                    badge.textContent = data.pending;
+                    badge.style.display = '';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        })
+        .catch(function(){});
+}
+setInterval(updatePendingBadge, 30000);
+updatePendingBadge();
+</script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

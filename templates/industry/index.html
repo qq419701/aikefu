@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}行业管理{% endblock %}
+{% block page_title %}行业管理{% endblock %}
+{% block page_subtitle %}多行业配置，各行业独立知识库和规则{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div></div>
+    {% if current_user.is_admin() %}
+    <a href="{{ url_for('industry.add') }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> 添加行业
+    </a>
+    {% endif %}
+</div>
+
+<div class="row g-3">
+    {% for industry in industries %}
+    <div class="col-md-6 col-xl-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div style="font-size: 2.5rem;">{{ industry.icon }}</div>
+                        <div>
+                            <h6 class="fw-bold mb-1">{{ industry.name }}</h6>
+                            <small class="text-muted">代码：{{ industry.code }}</small>
+                        </div>
+                    </div>
+                    <div>
+                        {% if industry.is_active %}
+                            <span class="badge bg-success">启用</span>
+                        {% else %}
+                            <span class="badge bg-secondary">禁用</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <p class="text-muted small mt-3 mb-2">{{ industry.description or '暂无描述' }}</p>
+                
+                <!-- 统计信息 -->
+                <div class="row g-2 mb-3">
+                    <div class="col-4 text-center">
+                        <div class="fw-bold text-primary">{{ industry.shop_count }}</div>
+                        <div class="text-muted" style="font-size:0.7rem;">店铺数</div>
+                    </div>
+                    <div class="col-4 text-center">
+                        <div class="fw-bold text-success">{{ industry.knowledge_count }}</div>
+                        <div class="text-muted" style="font-size:0.7rem;">知识库</div>
+                    </div>
+                    <div class="col-4 text-center">
+                        <div class="fw-bold text-info">{{ industry.platform }}</div>
+                        <div class="text-muted" style="font-size:0.7rem;">平台</div>
+                    </div>
+                </div>
+                
+                <!-- 功能开关状态 -->
+                <div class="d-flex gap-2 flex-wrap mb-3">
+                    {% if industry.auto_reply_enabled %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">自动回复</span>
+                    {% endif %}
+                    {% if industry.vision_enabled %}
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">图片识别</span>
+                    {% endif %}
+                    {% if industry.emotion_enabled %}
+                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">情绪识别</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card-footer bg-white border-0 pt-0">
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('industry.edit', industry_id=industry.id) }}"
+                       class="btn btn-sm btn-outline-primary flex-fill">
+                        <i class="bi bi-pencil"></i> 编辑
+                    </a>
+                    <a href="{{ url_for('shop.index') }}?industry_id={{ industry.id }}"
+                       class="btn btn-sm btn-outline-secondary flex-fill">
+                        <i class="bi bi-shop"></i> 店铺
+                    </a>
+                    {% if current_user.is_admin() %}
+                    <button class="btn btn-sm btn-outline-warning"
+                            onclick="toggleIndustry({{ industry.id }}, this)"
+                            title="{{ '禁用' if industry.is_active else '启用' }}">
+                        <i class="bi bi-{{ 'pause' if industry.is_active else 'play' }}"></i>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body text-center py-5 text-muted">
+                <i class="bi bi-grid fs-1"></i>
+                <p class="mt-2">暂无行业配置，点击右上角添加</p>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleIndustry(id, btn) {
+    fetch('/industry/' + id + '/toggle', {method: 'POST'})
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) location.reload();
+            else alert(data.message);
+        });
+}
+</script>
+{% endblock %}

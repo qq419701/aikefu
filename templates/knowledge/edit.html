@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}编辑知识库{% endblock %}
+{% block page_title %}编辑知识库条目{% endblock %}
+{% block page_subtitle %}修改问答内容{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm" style="max-width: 750px;">
+    <div class="card-body p-4">
+        <form method="POST">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">所属行业</label>
+                    <input class="form-control bg-light"
+                           value="{{ item.industry.icon + ' ' + item.industry.name if item.industry else '' }}" readonly>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">分类</label>
+                    <select class="form-select" name="category">
+                        <option value="general" {% if item.category == 'general' %}selected{% endif %}>通用</option>
+                        <option value="exchange" {% if item.category == 'exchange' %}selected{% endif %}>换号/换货</option>
+                        <option value="refund" {% if item.category == 'refund' %}selected{% endif %}>退款问题</option>
+                        <option value="login" {% if item.category == 'login' %}selected{% endif %}>登录问题</option>
+                        <option value="payment" {% if item.category == 'payment' %}selected{% endif %}>付款问题</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">优先级</label>
+                    <input type="number" class="form-control" name="priority" value="{{ item.priority }}">
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">是否启用</label>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="is_active" id="is_active"
+                               {% if item.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">启用此条目</label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">问题</label>
+                    <input type="text" class="form-control" name="question" value="{{ item.question }}" required>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">答案</label>
+                    <textarea class="form-control" name="answer" rows="5" required>{{ item.answer }}</textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">触发关键词</label>
+                    <input type="text" class="form-control" name="keywords" value="{{ item.keywords }}">
+                </div>
+                <div class="col-12">
+                    <div class="text-muted small">
+                        <i class="bi bi-bar-chart"></i> 命中次数：{{ item.hit_count }}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> 保存修改
+                </button>
+                <a href="{{ url_for('knowledge.index', industry_id=item.industry_id) }}"
+                   class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}添加店铺{% endblock %}
+{% block page_title %}添加店铺{% endblock %}
+{% block page_subtitle %}在指定行业下添加电商平台店铺{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm" style="max-width: 750px;">
+    <div class="card-body p-4">
+        <form method="POST">
+            <!-- 基本信息 -->
+            <h6 class="fw-bold text-primary mb-3"><i class="bi bi-info-circle"></i> 基本信息</h6>
+            <div class="row g-3 mb-4">
+                <div class="col-md-8">
+                    <label class="form-label fw-semibold">店铺名称 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="name" required placeholder="如：我的拼多多旗舰店">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">所属行业 <span class="text-danger">*</span></label>
+                    <select class="form-select" name="industry_id" required>
+                        <option value="">请选择行业</option>
+                        {% for industry in industries %}
+                        <option value="{{ industry.id }}">{{ industry.icon }} {{ industry.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">同行业店铺共享知识库</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">电商平台</label>
+                    <select class="form-select" name="platform">
+                        <option value="pdd">拼多多</option>
+                        <option value="taobao">淘宝</option>
+                        <option value="jd">京东</option>
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label fw-semibold">平台店铺ID</label>
+                    <input type="text" class="form-control" name="platform_shop_id" placeholder="拼多多/淘宝店铺ID">
+                </div>
+            </div>
+            
+            <!-- 平台API配置 -->
+            <h6 class="fw-bold text-primary mb-3"><i class="bi bi-key"></i> 平台API配置</h6>
+            <div class="alert alert-info py-2 small mb-3">
+                <i class="bi bi-info-circle"></i>
+                拼多多：在商家后台 → 应用管理 → 开放API 获取 AppKey 和 AppSecret
+            </div>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Client ID（AppKey）</label>
+                    <input type="text" class="form-control" name="client_id" placeholder="平台API AppKey">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Client Secret（AppSecret）</label>
+                    <input type="password" class="form-control" name="client_secret" placeholder="平台API AppSecret">
+                </div>
+            </div>
+            
+            <!-- 游戏租号专用（u号租） -->
+            <h6 class="fw-bold text-primary mb-3">
+                <i class="bi bi-controller"></i> 游戏租号专用配置（可选）
+            </h6>
+            <div class="row g-3 mb-4">
+                <div class="col-12">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="auto_exchange_enabled"
+                               id="auto_exchange">
+                        <label class="form-check-label fw-semibold" for="auto_exchange">
+                            启用自动换号（u号租平台）
+                        </label>
+                    </div>
+                    <div class="form-text">开启后，买家申请换号时自动操作u号租后台完成换货</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">u号租账号</label>
+                    <input type="text" class="form-control" name="uzuzu_account" placeholder="u号租平台账号">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">u号租密码</label>
+                    <input type="password" class="form-control" name="uzuzu_password" placeholder="u号租平台密码">
+                </div>
+            </div>
+            
+            <!-- 其他设置 -->
+            <h6 class="fw-bold text-primary mb-3"><i class="bi bi-gear"></i> 其他设置</h6>
+            <div class="row g-3 mb-4">
+                <div class="col-12">
+                    <label class="form-label fw-semibold">店铺备注</label>
+                    <input type="text" class="form-control" name="note" placeholder="内部备注（可选）">
+                </div>
+            </div>
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> 保存店铺
+                </button>
+                <a href="{{ url_for('shop.index') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

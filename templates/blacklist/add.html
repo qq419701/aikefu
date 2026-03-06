@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}添加黑名单{% endblock %}
+{% block page_title %}添加黑名单{% endblock %}
+{% block page_subtitle %}将恶意买家加入黑名单，同行业所有店铺生效{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm" style="max-width: 600px;">
+    <div class="card-body p-4">
+        <form method="POST">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">所属行业 <span class="text-danger">*</span></label>
+                    <select class="form-select" name="industry_id" required>
+                        <option value="">请选择行业</option>
+                        {% for industry in industries %}
+                        <option value="{{ industry.id }}">{{ industry.icon }} {{ industry.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">行业内所有店铺共享黑名单</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">黑名单级别</label>
+                    <select class="form-select" name="level">
+                        <option value="1">1 - 观察（仍可正常服务）</option>
+                        <option value="2">2 - 警告（限制自动回复）</option>
+                        <option value="3">3 - 封禁（所有消息转人工）</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">买家平台ID <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="buyer_id" required placeholder="平台买家唯一ID">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">买家昵称</label>
+                    <input type="text" class="form-control" name="buyer_name" placeholder="买家昵称（可选）">
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">加入原因</label>
+                    <textarea class="form-control" name="reason" rows="3"
+                              placeholder="如：频繁退款、投诉举报、恶意评价等"></textarea>
+                </div>
+            </div>
+            
+            <div class="alert alert-warning mt-3 small">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>注意：</strong>黑名单在该行业所有店铺中生效，该买家的消息将自动转人工处理。
+            </div>
+            
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-danger">
+                    <i class="bi bi-slash-circle"></i> 加入黑名单
+                </button>
+                <a href="{{ url_for('blacklist.index') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

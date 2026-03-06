@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}编辑规则{% endblock %}
+{% block page_title %}编辑规则：{{ rule.name }}{% endblock %}
+{% block page_subtitle %}修改规则关键词和回复内容{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm" style="max-width: 750px;">
+    <div class="card-body p-4">
+        <form method="POST">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">所属行业</label>
+                    <input class="form-control bg-light"
+                           value="{{ rule.industry.icon + ' ' + rule.industry.name if rule.industry else '' }}" readonly>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">规则名称</label>
+                    <input type="text" class="form-control" name="name" value="{{ rule.name }}" required>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label fw-semibold">触发关键词</label>
+                    <input type="text" class="form-control" name="trigger_keywords"
+                           value="{{ rule.trigger_keywords }}" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">匹配模式</label>
+                    <select class="form-select" name="match_mode">
+                        <option value="any" {% if rule.match_mode == 'any' %}selected{% endif %}>任一匹配</option>
+                        <option value="all" {% if rule.match_mode == 'all' %}selected{% endif %}>全词匹配</option>
+                        <option value="exact" {% if rule.match_mode == 'exact' %}selected{% endif %}>精确匹配</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">优先级</label>
+                    <input type="number" class="form-control" name="priority" value="{{ rule.priority }}">
+                </div>
+                <div class="col-12">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="is_active" id="is_active"
+                               {% if rule.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">启用此规则</label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">回复内容</label>
+                    <textarea class="form-control" name="reply_content" rows="5" required>{{ rule.reply_content }}</textarea>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">触发动作</label>
+                    <select class="form-select" name="action_type">
+                        <option value="" {% if not rule.action_type %}selected{% endif %}>无动作</option>
+                        <option value="exchange" {% if rule.action_type == 'exchange' %}selected{% endif %}>自动换号</option>
+                        <option value="refund_guide" {% if rule.action_type == 'refund_guide' %}selected{% endif %}>退款引导</option>
+                        <option value="transfer_human" {% if rule.action_type == 'transfer_human' %}selected{% endif %}>转人工</option>
+                    </select>
+                </div>
+                <div class="col-12 text-muted small">
+                    <i class="bi bi-bar-chart"></i> 命中次数：{{ rule.hit_count }}
+                </div>
+            </div>
+            
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> 保存修改
+                </button>
+                <a href="{{ url_for('rules.index', industry_id=rule.industry_id) }}"
+                   class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

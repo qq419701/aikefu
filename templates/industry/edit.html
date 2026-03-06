@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}编辑行业 - {{ industry.name }}{% endblock %}
+{% block page_title %}编辑行业：{{ industry.icon }} {{ industry.name }}{% endblock %}
+{% block page_subtitle %}修改行业配置，店铺共享这些设置{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm" style="max-width: 700px;">
+    <div class="card-body p-4">
+        <form method="POST">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">行业代码</label>
+                    <input type="text" class="form-control bg-light" value="{{ industry.code }}" readonly>
+                    <div class="form-text">行业代码创建后不可修改</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">行业名称 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="name" value="{{ industry.name }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">行业图标</label>
+                    <input type="text" class="form-control" name="icon" value="{{ industry.icon }}">
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label fw-semibold">主要平台</label>
+                    <select class="form-select" name="platform">
+                        <option value="pdd" {% if industry.platform == 'pdd' %}selected{% endif %}>拼多多</option>
+                        <option value="taobao" {% if industry.platform == 'taobao' %}selected{% endif %}>淘宝</option>
+                        <option value="jd" {% if industry.platform == 'jd' %}selected{% endif %}>京东</option>
+                        <option value="general" {% if industry.platform == 'general' %}selected{% endif %}>通用</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">行业描述</label>
+                    <textarea class="form-control" name="description" rows="2">{{ industry.description }}</textarea>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">AI系统提示词</label>
+                    <textarea class="form-control" name="ai_system_prompt" rows="8">{{ industry.ai_system_prompt }}</textarea>
+                    <div class="form-text">店铺可以设置自定义提示词覆盖此设置</div>
+                </div>
+                
+                <!-- 功能开关 -->
+                <div class="col-12">
+                    <label class="form-label fw-semibold">功能开关</label>
+                    <div class="d-flex gap-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="auto_reply_enabled"
+                                   id="auto_reply" {% if industry.auto_reply_enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="auto_reply">自动回复</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="vision_enabled"
+                                   id="vision" {% if industry.vision_enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="vision">图片识别</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="emotion_enabled"
+                                   id="emotion" {% if industry.emotion_enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="emotion">情绪识别</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> 保存修改
+                </button>
+                <a href="{{ url_for('industry.index') }}" class="btn btn-outline-secondary">取消</a>
+                
+                {% if current_user.is_admin() and industry.shop_count == 0 %}
+                <form method="POST" action="{{ url_for('industry.delete', industry_id=industry.id) }}"
+                      class="ms-auto" onsubmit="return confirm('确认删除该行业？此操作不可恢复！')">
+                    <button type="submit" class="btn btn-outline-danger">
+                        <i class="bi bi-trash"></i> 删除行业
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

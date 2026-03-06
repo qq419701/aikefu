@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}添加知识库{% endblock %}
+{% block page_title %}添加知识库条目{% endblock %}
+{% block page_subtitle %}添加问答对，三层处理第二层，免费覆盖55%消息{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm" style="max-width: 750px;">
+    <div class="card-body p-4">
+        <form method="POST">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">所属行业 <span class="text-danger">*</span></label>
+                    <select class="form-select" name="industry_id" required>
+                        <option value="">请选择行业</option>
+                        {% for industry in industries %}
+                        <option value="{{ industry.id }}">{{ industry.icon }} {{ industry.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">该行业下所有店铺共享此知识库</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">分类</label>
+                    <select class="form-select" name="category">
+                        <option value="general">通用</option>
+                        <option value="exchange">换号/换货</option>
+                        <option value="refund">退款问题</option>
+                        <option value="login">登录问题</option>
+                        <option value="payment">付款问题</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-semibold">优先级</label>
+                    <input type="number" class="form-control" name="priority" value="0" min="0" max="100">
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">问题 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="question" required
+                           placeholder="买家可能问的问题，如：账号登录不上怎么办？">
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">答案 <span class="text-danger">*</span></label>
+                    <textarea class="form-control" name="answer" rows="5" required
+                              placeholder="AI回复的答案内容，支持多行格式"></textarea>
+                    <div class="form-text">支持变量：{buyer_name}买家昵称、{order_id}订单号</div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-semibold">触发关键词</label>
+                    <input type="text" class="form-control" name="keywords"
+                           placeholder="用逗号分隔，如：登录,登不上,登录失败">
+                    <div class="form-text">消息包含这些关键词时优先匹配，提高命中率</div>
+                </div>
+            </div>
+            
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> 保存
+                </button>
+                <a href="{{ url_for('knowledge.index') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}消息管理{% endblock %}
+{% block page_title %}消息管理{% endblock %}
+{% block page_subtitle %}实时查看买家消息，处理需人工干预的会话{% endblock %}
+
+{% block content %}
+<!-- 统计卡片 -->
+{% if pending_human > 0 %}
+<div class="alert alert-warning d-flex align-items-center mb-3">
+    <i class="bi bi-exclamation-triangle-fill fs-5 me-2"></i>
+    <div>
+        <strong>有 {{ pending_human }} 条消息需要人工处理！</strong>
+        <a href="?needs_human=1" class="ms-2 text-warning">点击查看</a>
+    </div>
+</div>
+{% endif %}
+
+<!-- 筛选栏 -->
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label mb-1 small">店铺筛选</label>
+                <select class="form-select form-select-sm" name="shop_id" onchange="this.form.submit()">
+                    <option value="">全部店铺</option>
+                    {% for shop in shops %}
+                    <option value="{{ shop.id }}" {% if shop.id == selected_shop %}selected{% endif %}>
+                        {{ shop.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label mb-1 small">状态筛选</label>
+                <select class="form-select form-select-sm" name="status" onchange="this.form.submit()">
+                    <option value="">全部</option>
+                    <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>待处理</option>
+                    <option value="processed" {% if status_filter == 'processed' %}selected{% endif %}>已处理</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <div class="form-check form-switch mt-4">
+                    <input class="form-check-input" type="checkbox" name="needs_human" value="1"
+                           id="needs_human" {% if needs_human_filter == '1' %}checked{% endif %}
+                           onchange="this.form.submit()">
+                    <label class="form-check-label small" for="needs_human">仅看待人工</label>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 消息列表 -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        {% if messages.items %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">买家</th>
+                        <th>消息内容</th>
+                        <th>情绪</th>
+                        <th>处理方式</th>
+                        <th>状态</th>
+                        <th>时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for msg in messages.items %}
+                    <tr {% if msg.needs_human and not msg.is_transferred %}class="table-warning"{% endif %}>
+                        <td class="ps-3">
+                            <div class="fw-semibold">{{ msg.buyer_name or msg.buyer_id }}</div>
+                            <small class="text-muted">{{ msg.buyer_id }}</small>
+                            {% if msg.order_id %}
+                            <br><small class="text-muted">订单：{{ msg.order_id }}</small>
+                            {% endif %}
+                        </td>
+                        <td style="max-width: 300px;">
+                            <div class="text-truncate" title="{{ msg.content }}">
+                                {% if msg.msg_type == 'image' %}
+                                    <i class="bi bi-image text-info"></i> [图片消息]
+                                {% else %}
+                                    {{ msg.content[:80] }}{% if msg.content|length > 80 %}...{% endif %}
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            {% if msg.emotion_level == 0 %}
+                                <span class="badge bg-secondary">正常</span>
+                            {% elif msg.emotion_level == 1 %}
+                                <span class="badge bg-warning text-dark">轻微</span>
+                            {% elif msg.emotion_level == 2 %}
+                                <span class="badge" style="background:#fd7e14;">中度</span>
+                            {% elif msg.emotion_level == 3 %}
+                                <span class="badge bg-danger">严重</span>
+                            {% else %}
+                                <span class="badge" style="background:#6f42c1;">危机</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if msg.process_by == 'rule' %}
+                                <span class="badge bg-info">规则</span>
+                            {% elif msg.process_by == 'knowledge' %}
+                                <span class="badge bg-success">知识库</span>
+                            {% elif msg.process_by in ['ai', 'ai_vision'] %}
+                                <span class="badge bg-primary">AI</span>
+                            {% elif msg.process_by == 'human' %}
+                                <span class="badge bg-danger">人工</span>
+                            {% else %}
+                                <span class="badge bg-light text-dark">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if msg.needs_human and not msg.is_transferred %}
+                                <span class="badge bg-warning text-dark">待人工</span>
+                            {% elif msg.status == 'processed' %}
+                                <span class="badge bg-success">已处理</span>
+                            {% else %}
+                                <span class="badge bg-secondary">处理中</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small class="text-muted">
+                                {{ msg.msg_time.strftime('%m-%d %H:%M') if msg.msg_time else '' }}
+                            </small>
+                        </td>
+                        <td>
+                            {% if msg.needs_human and not msg.is_transferred %}
+                            <button onclick="markHandled({{ msg.id }}, this)"
+                                    class="btn btn-xs btn-success" style="padding:2px 8px;font-size:0.75rem;">
+                                <i class="bi bi-check"></i> 完成
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- 分页 -->
+        {% if messages.pages > 1 %}
+        <div class="d-flex justify-content-center py-3">
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if messages.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ messages.prev_num }}">上一页</a>
+                    </li>
+                    {% endif %}
+                    <li class="page-item active">
+                        <a class="page-link">{{ messages.page }}/{{ messages.pages }}</a>
+                    </li>
+                    {% if messages.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ messages.next_num }}">下一页</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-inbox fs-1"></i>
+            <p class="mt-2">暂无消息记录</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function markHandled(id, btn) {
+    btn.disabled = true;
+    btn.textContent = '处理中...';
+    fetch('/messages/' + id + '/mark-handled', {method: 'POST'})
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                btn.closest('tr').classList.remove('table-warning');
+                btn.parentElement.innerHTML = '<span class="badge bg-success">已完成</span>';
+            } else {
+                btn.disabled = false;
+                btn.textContent = '完成';
+                alert(data.message);
+            }
+        });
+}
+</script>
+{% endblock %}

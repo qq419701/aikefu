@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}黑名单管理{% endblock %}
+{% block page_title %}黑名单管理{% endblock %}
+{% block page_subtitle %}行业级别黑名单，同行业所有店铺共享，自动识别恶意买家{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    {% if current_user.is_admin() %}
+    <form method="GET" class="d-flex gap-2">
+        <select class="form-select form-select-sm" name="industry_id" onchange="this.form.submit()" style="width:200px;">
+            <option value="">全部行业</option>
+            {% for ind in industries %}
+            <option value="{{ ind.id }}" {% if ind.id == selected_industry %}selected{% endif %}>
+                {{ ind.icon }} {{ ind.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </form>
+    {% else %}<div></div>{% endif %}
+    
+    <a href="{{ url_for('blacklist.add') }}" class="btn btn-danger">
+        <i class="bi bi-slash-circle"></i> 添加黑名单
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        {% if entries.items %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">买家ID</th>
+                        <th>买家昵称</th>
+                        <th>行业</th>
+                        <th>级别</th>
+                        <th>原因</th>
+                        <th>退款次数</th>
+                        <th>状态</th>
+                        <th>加入时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in entries.items %}
+                    <tr {% if not entry.is_active %}class="text-muted opacity-75"{% endif %}>
+                        <td class="ps-3 fw-semibold">{{ entry.buyer_id }}</td>
+                        <td>{{ entry.buyer_name or '-' }}</td>
+                        <td>
+                            <small>
+                                {% if entry.industry %}
+                                    {{ entry.industry.icon }} {{ entry.industry.name }}
+                                {% else %}-{% endif %}
+                            </small>
+                        </td>
+                        <td>
+                            {% if entry.level == 1 %}
+                                <span class="badge bg-warning text-dark">观察</span>
+                            {% elif entry.level == 2 %}
+                                <span class="badge bg-orange" style="background:#fd7e14;">警告</span>
+                            {% else %}
+                                <span class="badge bg-danger">封禁</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="text-truncate text-muted small" style="max-width: 150px;"
+                                 title="{{ entry.reason }}">
+                                {{ entry.reason or '-' }}
+                            </div>
+                        </td>
+                        <td class="text-center">{{ entry.refund_count }}</td>
+                        <td>
+                            {% if entry.is_active %}
+                                <span class="badge bg-danger">黑名单中</span>
+                            {% else %}
+                                <span class="badge bg-secondary">已解除</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small class="text-muted">
+                                {{ entry.created_at.strftime('%Y-%m-%d') if entry.created_at else '' }}
+                            </small>
+                        </td>
+                        <td>
+                            {% if entry.is_active %}
+                            <button onclick="removeBlacklist({{ entry.id }}, this)"
+                                    class="btn btn-xs btn-outline-success" style="padding:2px 8px;font-size:0.75rem;">
+                                解除
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        {% if entries.pages > 1 %}
+        <div class="d-flex justify-content-center py-3">
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if entries.has_prev %}
+                    <li class="page-item"><a class="page-link" href="?page={{ entries.prev_num }}">上一页</a></li>
+                    {% endif %}
+                    <li class="page-item active"><a class="page-link">{{ entries.page }}/{{ entries.pages }}</a></li>
+                    {% if entries.has_next %}
+                    <li class="page-item"><a class="page-link" href="?page={{ entries.next_num }}">下一页</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-shield-check fs-1 text-success"></i>
+            <p class="mt-2">暂无黑名单记录</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function removeBlacklist(id, btn) {
+    if (!confirm('确认解除该买家的黑名单？')) return;
+    btn.disabled = true;
+    fetch('/blacklist/' + id + '/remove', {method: 'POST'})
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) location.reload();
+            else { btn.disabled = false; alert(data.message); }
+        });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}规则引擎{% endblock %}
+{% block page_title %}规则引擎管理{% endblock %}
+{% block page_subtitle %}关键词规则匹配，三层处理第一层，0成本覆盖20%消息{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    {% if current_user.is_admin() %}
+    <form method="GET" class="d-flex gap-2">
+        <select class="form-select form-select-sm" name="industry_id" onchange="this.form.submit()" style="width:200px;">
+            <option value="">全部行业</option>
+            {% for ind in industries %}
+            <option value="{{ ind.id }}" {% if ind.id == selected_industry %}selected{% endif %}>
+                {{ ind.icon }} {{ ind.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </form>
+    {% else %}
+    <div></div>
+    {% endif %}
+    
+    <a href="{{ url_for('rules.add') }}{% if selected_industry %}?industry_id={{ selected_industry }}{% endif %}"
+       class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> 添加规则
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        {% if rules %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">优先级</th>
+                        <th>规则名称</th>
+                        <th>行业</th>
+                        <th>触发关键词</th>
+                        <th>匹配模式</th>
+                        <th>回复预览</th>
+                        <th>命中次数</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rule in rules %}
+                    <tr {% if not rule.is_active %}class="text-muted opacity-75"{% endif %}>
+                        <td class="ps-3">
+                            <span class="badge bg-secondary">{{ rule.priority }}</span>
+                        </td>
+                        <td class="fw-semibold">{{ rule.name }}</td>
+                        <td>
+                            <small>
+                                {% if rule.industry %}
+                                    {{ rule.industry.icon }} {{ rule.industry.name }}
+                                {% else %}-{% endif %}
+                            </small>
+                        </td>
+                        <td>
+                            <div class="d-flex flex-wrap gap-1">
+                                {% for kw in rule.get_keywords_list()[:4] %}
+                                    <span class="badge bg-light text-dark border">{{ kw }}</span>
+                                {% endfor %}
+                                {% if rule.get_keywords_list()|length > 4 %}
+                                    <span class="badge bg-secondary">+{{ rule.get_keywords_list()|length - 4 }}</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            {% if rule.match_mode == 'any' %}<span class="badge bg-info">任一匹配</span>
+                            {% elif rule.match_mode == 'all' %}<span class="badge bg-warning text-dark">全词匹配</span>
+                            {% else %}<span class="badge bg-primary">精确匹配</span>{% endif %}
+                        </td>
+                        <td>
+                            <div class="text-truncate text-muted small" style="max-width: 150px;">
+                                {{ rule.reply_content[:40] }}...
+                            </div>
+                            {% if rule.action_type %}
+                                <span class="badge bg-warning-subtle text-warning border border-warning-subtle">动作: {{ rule.action_type }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-light text-dark">{{ rule.hit_count }}</span>
+                        </td>
+                        <td>
+                            {% if rule.is_active %}
+                                <span class="badge bg-success">启用</span>
+                            {% else %}
+                                <span class="badge bg-secondary">禁用</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <a href="{{ url_for('rules.edit', rule_id=rule.id) }}"
+                                   class="btn btn-xs btn-outline-primary" style="padding:2px 8px;font-size:0.75rem;">
+                                    编辑
+                                </a>
+                                <button onclick="toggleRule({{ rule.id }}, this)"
+                                        class="btn btn-xs btn-outline-warning" style="padding:2px 8px;font-size:0.75rem;">
+                                    {{ '禁用' if rule.is_active else '启用' }}
+                                </button>
+                                <form method="POST" action="{{ url_for('rules.delete', rule_id=rule.id) }}"
+                                      onsubmit="return confirm('确认删除？')">
+                                    <button type="submit" class="btn btn-xs btn-outline-danger" style="padding:2px 8px;font-size:0.75rem;">
+                                        删除
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-lightning-charge fs-1"></i>
+            <p class="mt-2">暂无规则，添加规则可0成本处理常见问题</p>
+            <a href="{{ url_for('rules.add') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle"></i> 添加第一条规则
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleRule(id, btn) {
+    fetch('/rules/' + id + '/toggle', {method: 'POST'})
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) location.reload();
+            else alert(data.message);
+        });
+}
+</script>
+{% endblock %}

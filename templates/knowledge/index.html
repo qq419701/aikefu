@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}知识库管理{% endblock %}
+{% block page_title %}知识库管理{% endblock %}
+{% block page_subtitle %}管理行业问答知识库，三层处理第二层，0成本{% endblock %}
+
+{% block content %}
+<!-- 筛选栏 -->
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            {% if current_user.is_admin() %}
+            <div class="col-md-3">
+                <label class="form-label mb-1 small">行业筛选</label>
+                <select class="form-select form-select-sm" name="industry_id" onchange="this.form.submit()">
+                    <option value="">全部行业</option>
+                    {% for ind in industries %}
+                    <option value="{{ ind.id }}" {% if ind.id == selected_industry %}selected{% endif %}>
+                        {{ ind.icon }} {{ ind.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="col-md-3">
+                <label class="form-label mb-1 small">分类筛选</label>
+                <select class="form-select form-select-sm" name="category" onchange="this.form.submit()">
+                    <option value="">全部分类</option>
+                    <option value="general" {% if selected_category == 'general' %}selected{% endif %}>通用</option>
+                    <option value="exchange" {% if selected_category == 'exchange' %}selected{% endif %}>换号/换货</option>
+                    <option value="refund" {% if selected_category == 'refund' %}selected{% endif %}>退款</option>
+                    <option value="login" {% if selected_category == 'login' %}selected{% endif %}>登录问题</option>
+                    <option value="payment" {% if selected_category == 'payment' %}selected{% endif %}>付款问题</option>
+                </select>
+            </div>
+            <div class="col-auto ms-auto">
+                <a href="{{ url_for('knowledge.add') }}{% if selected_industry %}?industry_id={{ selected_industry }}{% endif %}"
+                   class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle"></i> 添加知识库条目
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 知识库列表 -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        {% if items.items %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">行业</th>
+                        <th>问题</th>
+                        <th>答案预览</th>
+                        <th>关键词</th>
+                        <th>命中次数</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items.items %}
+                    <tr {% if not item.is_active %}class="text-muted"{% endif %}>
+                        <td class="ps-3">
+                            <small>{{ item.industry.icon + ' ' + item.industry.name if item.industry else '未知' }}</small>
+                        </td>
+                        <td>
+                            <div class="fw-semibold" style="max-width: 200px;">{{ item.question[:40] }}{% if item.question|length > 40 %}...{% endif %}</div>
+                            <small class="badge bg-secondary">{{ item.category }}</small>
+                        </td>
+                        <td>
+                            <div class="text-truncate text-muted small" style="max-width: 200px;">
+                                {{ item.answer[:60] }}...
+                            </div>
+                        </td>
+                        <td>
+                            <small class="text-muted">
+                                {{ item.keywords[:30] if item.keywords else '-' }}
+                            </small>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-light text-dark">{{ item.hit_count }}</span>
+                        </td>
+                        <td>
+                            {% if item.is_active %}
+                                <span class="badge bg-success">启用</span>
+                            {% else %}
+                                <span class="badge bg-secondary">禁用</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <a href="{{ url_for('knowledge.edit', item_id=item.id) }}"
+                                   class="btn btn-xs btn-outline-primary" style="padding:2px 8px;font-size:0.75rem;">
+                                    编辑
+                                </a>
+                                <form method="POST" action="{{ url_for('knowledge.delete', item_id=item.id) }}"
+                                      onsubmit="return confirm('确认删除？')">
+                                    <button type="submit" class="btn btn-xs btn-outline-danger" style="padding:2px 8px;font-size:0.75rem;">
+                                        删除
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- 分页 -->
+        {% if items.pages > 1 %}
+        <div class="d-flex justify-content-center py-3">
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if items.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ items.prev_num }}{% if selected_industry %}&industry_id={{ selected_industry }}{% endif %}">上一页</a>
+                    </li>
+                    {% endif %}
+                    <li class="page-item active"><a class="page-link">{{ items.page }}/{{ items.pages }}</a></li>
+                    {% if items.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ items.next_num }}{% if selected_industry %}&industry_id={{ selected_industry }}{% endif %}">下一页</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-book fs-1"></i>
+            <p class="mt-2">暂无知识库条目</p>
+            <a href="{{ url_for('knowledge.add') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle"></i> 添加第一条知识
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

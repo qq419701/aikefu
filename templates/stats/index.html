@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}统计报表{% endblock %}
+{% block page_title %}统计报表{% endblock %}
+{% block page_subtitle %}近30天运营数据分析，包括AI成本、解决率等指标{% endblock %}
+
+{% block content %}
+<!-- 汇总统计卡片 -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body py-4">
+                <div class="fs-1 fw-bold text-primary">{{ total_messages | int }}</div>
+                <div class="text-muted">近30天消息总量</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body py-4">
+                <div class="fs-1 fw-bold text-success">{{ avg_solve_rate }}%</div>
+                <div class="text-muted">平均AI解决率</div>
+                <small class="text-{% if avg_solve_rate >= 90 %}success{% elif avg_solve_rate >= 70 %}warning{% else %}danger{% endif %}">
+                    目标 ≥ 90%
+                </small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body py-4">
+                <div class="fs-1 fw-bold text-info">{{ total_tokens | int }}</div>
+                <div class="text-muted">消耗Token总量</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm text-center">
+            <div class="card-body py-4">
+                <div class="fs-1 fw-bold text-warning">¥{{ "%.4f"|format(total_cost) }}</div>
+                <div class="text-muted">近30天AI费用</div>
+                <small class="text-success">目标 ≤ ¥20/月</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 每日数据表格 -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <h6 class="fw-semibold mb-0">
+            <i class="bi bi-calendar3 text-primary"></i> 近30天每日数据
+        </h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 text-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">日期</th>
+                        <th>总消息</th>
+                        <th>规则引擎</th>
+                        <th>知识库</th>
+                        <th>AI处理</th>
+                        <th>AI解决率</th>
+                        <th>Token消耗</th>
+                        <th>AI费用</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat in stats_list | reverse %}
+                    <tr>
+                        <td class="ps-3 fw-semibold">{{ stat.stat_date }}</td>
+                        <td>{{ stat.total_messages }}</td>
+                        <td>
+                            <span class="badge bg-info">{{ stat.rule_handled }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-success">{{ stat.knowledge_handled }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-primary">{{ stat.ai_handled }}</span>
+                        </td>
+                        <td>
+                            {% set rate = stat.ai_solve_rate if stat.ai_solve_rate else 0 %}
+                            <span class="fw-semibold text-{% if rate >= 90 %}success{% elif rate >= 70 %}warning{% else %}danger{% endif %}">
+                                {{ "%.1f"|format(rate) }}%
+                            </span>
+                        </td>
+                        <td>{{ stat.total_tokens }}</td>
+                        <td>¥{{ "%.4f"|format(stat.ai_cost if stat.ai_cost else 0) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 成本说明 -->
+<div class="card border-0 shadow-sm mt-3">
+    <div class="card-body">
+        <h6 class="fw-semibold mb-3">💰 成本说明</h6>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="bg-light rounded p-3">
+                    <div class="fw-semibold text-info mb-1">第一层：规则引擎</div>
+                    <div class="text-success fw-bold">¥0 成本</div>
+                    <div class="text-muted small">关键词匹配，目标覆盖20%消息</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="bg-light rounded p-3">
+                    <div class="fw-semibold text-success mb-1">第二层：知识库</div>
+                    <div class="text-success fw-bold">¥0 成本</div>
+                    <div class="text-muted small">相似度检索，目标覆盖55%消息</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="bg-light rounded p-3">
+                    <div class="fw-semibold text-primary mb-1">第三层：豆包AI</div>
+                    <div class="text-warning fw-bold">约¥0.001/次</div>
+                    <div class="text-muted small">含缓存，命中缓存节省80%费用</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
