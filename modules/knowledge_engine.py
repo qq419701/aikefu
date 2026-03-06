@@ -46,12 +46,13 @@ class KnowledgeEngine:
 
         # 提取消息的词汇
         msg_words = self._extract_words(message)
+        msg_lower = message.lower()
 
         best_match = None
         best_score = 0.0
 
         for item in items:
-            score = self._calculate_similarity(msg_words, item)
+            score = self._calculate_similarity(msg_words, msg_lower, item)
             if score > best_score:
                 best_score = score
                 best_match = item
@@ -91,19 +92,22 @@ class KnowledgeEngine:
                 chinese_chars.add(w)
         return chinese_chars
 
-    def _calculate_similarity(self, msg_words: set, item: KnowledgeBase) -> float:
+    def _calculate_similarity(self, msg_words: set, msg_original: str, item: KnowledgeBase) -> float:
         """
         计算消息与知识库条目的相似度
         功能：综合考虑问题相似度和关键词匹配
         参数：
-            msg_words - 消息词汇集合
+            msg_words - 消息词汇集合（用于字符级重叠率计算）
+            msg_original - 原始消息文本（用于关键词精确匹配）
             item - 知识库条目
         返回：相似度分数（0.0-1.0）
         """
         if not msg_words:
             return 0.0
 
-        # 1. 计算与问题的词汇重叠率
+        msg_lower = msg_original.lower()
+
+        # 1. 计算与问题的词汇重叠率（字符级）
         question_words = self._extract_words(item.question)
         if question_words:
             overlap = len(msg_words & question_words)
@@ -111,13 +115,14 @@ class KnowledgeEngine:
         else:
             question_similarity = 0.0
 
-        # 2. 检查关键词匹配（权重更高）
+        # 2. 检查关键词匹配（在原始文本中搜索，支持多字词）
         keyword_score = 0.0
         keywords = item.get_keywords_list()
         if keywords:
+            # 使用原始消息文本匹配关键词，支持多字中文词（如"登不上"）
             matched_keywords = sum(
                 1 for kw in keywords
-                if kw.lower() in ' '.join(msg_words)
+                if kw.lower() in msg_lower
             )
             keyword_score = matched_keywords / len(keywords)
 

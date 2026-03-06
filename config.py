@@ -75,7 +75,7 @@ DOUBAO_TEMPERATURE = 0.3
 # ============================================================
 
 # 知识库相似度阈值（0.0-1.0，超过此值认为匹配）
-KNOWLEDGE_SIMILARITY_THRESHOLD = 0.7
+KNOWLEDGE_SIMILARITY_THRESHOLD = 0.6
 
 # 规则引擎覆盖率目标（%）
 RULES_COVERAGE_TARGET = 20
