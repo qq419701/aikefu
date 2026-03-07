@@ -106,7 +106,7 @@ def create_app():
         }
 
     app.logger.info(f"[启动] {config.SYSTEM_NAME} {config.SYSTEM_VERSION} 启动成功")
-    app.logger.info(f"[启动] 服务端口：{config.PORT}，数据库：{config.DATABASE_PATH}")
+    app.logger.info(f"[启动] 服务端口：{config.PORT}，数据库：{config.SQLALCHEMY_DATABASE_URI}")
 
     return app
 
