@@ -87,3 +87,103 @@ def get_server_url() -> str:
     """获取aikefu服务器地址"""
     cfg = load_config()
     return cfg.get("server_url", AIKEFU_SERVER)
+
+
+# ── U号租配置 ──────────────────────────────────────────────────────────────
+
+_UHAOZU_SETTINGS_DEFAULT = {
+    "max_exchange_per_order": 5,
+    "price_markup_rules": [
+        {"min": 0.1, "max": 0.5, "markup": 0.5},
+        {"min": 0.5, "max": 1.0, "markup": 1.0},
+        {"min": 1.0, "max": 10.0, "markup": 2.0},
+    ],
+    "game_configs": {
+        "王者荣耀": {
+            "platforms": ["安卓", "苹果"],
+            "login_methods": ["微信", "QQ"],
+            "filters": {
+                "no_deposit": True,
+                "time_rental_bonus": True,
+                "login_tool": True,
+                "anti_addiction": True,
+                "non_cloud": True,
+                "high_login_rate": True,
+                "no_friend_add": False,
+                "allow_ranked": True,
+            },
+        },
+    },
+}
+
+
+def get_uhaozu_accounts() -> list:
+    """获取U号租账号列表（密码已解密）"""
+    from core.encrypt import decrypt_password
+
+    cfg = load_config()
+    accounts = cfg.get("uhaozu_accounts", [])
+    result = []
+    for acc in accounts:
+        entry = dict(acc)
+        enc = entry.pop("password_enc", "")
+        try:
+            entry["password"] = decrypt_password(enc) if enc else ""
+        except Exception:
+            entry["password"] = ""
+        result.append(entry)
+    return result
+
+
+def save_uhaozu_accounts(accounts: list) -> bool:
+    """保存U号租账号列表（密码加密存储）"""
+    from core.encrypt import encrypt_password
+
+    cfg = load_config()
+    stored = []
+    for acc in accounts:
+        entry = {k: v for k, v in acc.items() if k != "password"}
+        plain = acc.get("password", "")
+        if plain:
+            try:
+                entry["password_enc"] = encrypt_password(plain)
+            except Exception:
+                entry["password_enc"] = acc.get("password_enc", "")
+        else:
+            entry["password_enc"] = acc.get("password_enc", "")
+        stored.append(entry)
+    cfg["uhaozu_accounts"] = stored
+    return save_config(cfg)
+
+
+def get_uhaozu_settings() -> dict:
+    """获取U号租设置（换号次数、加价规则、游戏配置）"""
+    import copy
+    cfg = load_config()
+    saved = cfg.get("uhaozu_settings", {})
+    defaults = copy.deepcopy(_UHAOZU_SETTINGS_DEFAULT)
+    # 浅层合并，game_configs 单独处理（保留默认游戏配置并覆盖已保存的游戏配置）
+    for k, v in saved.items():
+        if k == "game_configs":
+            merged_games = dict(defaults.get("game_configs", {}))
+            merged_games.update(v)
+            defaults["game_configs"] = merged_games
+        else:
+            defaults[k] = v
+    return defaults
+
+
+def save_uhaozu_settings(settings: dict) -> bool:
+    """保存U号租设置"""
+    cfg = load_config()
+    cfg["uhaozu_settings"] = settings
+    return save_config(cfg)
+
+
+def get_default_uhaozu_account() -> Optional[dict]:
+    """获取默认U号租账号（密码已解密）"""
+    accounts = get_uhaozu_accounts()
+    for acc in accounts:
+        if acc.get("is_default"):
+            return acc
+    return accounts[0] if accounts else None

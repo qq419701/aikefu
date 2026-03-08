@@ -24,6 +24,7 @@ from ui.dashboard_ui import DashboardPage
 from ui.shop_ui import ShopPage
 from ui.message_ui import MessagePage
 from ui.setting_ui import SettingPage
+from ui.uhaozu_ui import UHaozuPage
 from core.db_client import DBClient
 from core.server_api import ServerAPI
 import config as cfg
@@ -157,6 +158,7 @@ class MainWindow(FluentWindow):
         self.shop_page = ShopPage(db_client=self.db_client)
         self.message_page = MessagePage(db_client=self.db_client)
         self.setting_page = SettingPage(db_client=self.db_client)
+        self.uhaozu_page = UHaozuPage(db_client=self.db_client)
 
         # 连接信号
         self.shop_page.channel_start_requested.connect(self._start_shop)
@@ -175,11 +177,13 @@ class MainWindow(FluentWindow):
         self.dashboard_page.setObjectName("dashboardPage")
         self.shop_page.setObjectName("shopPage")
         self.message_page.setObjectName("messagePage")
+        self.uhaozu_page.setObjectName("uhaozuPage")
         self.setting_page.setObjectName("settingPage")
 
         self.addSubInterface(self.dashboard_page, FluentIcon.HOME, "首页")
         self.addSubInterface(self.shop_page, FluentIcon.SHOPPING_CART, "店铺管理")
         self.addSubInterface(self.message_page, FluentIcon.CHAT, "消息监控")
+        self.addSubInterface(self.uhaozu_page, FluentIcon.SPEED, "U号租专区")
         self.addSubInterface(
             self.setting_page,
             FluentIcon.SETTING,
@@ -194,6 +198,7 @@ class MainWindow(FluentWindow):
         tabs.addTab(self.dashboard_page, "首页")
         tabs.addTab(self.shop_page, "店铺管理")
         tabs.addTab(self.message_page, "消息监控")
+        tabs.addTab(self.uhaozu_page, "U号租专区")
         tabs.addTab(self.setting_page, "设置")
         self.setCentralWidget(tabs)
 
