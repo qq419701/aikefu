@@ -1,66 +1,40 @@
-'use strict';
+// 爱客服采集插件 - popup.js
 
-document.addEventListener('DOMContentLoaded', () => {
-    chrome.storage.local.get(['serverUrl', 'shopToken', 'autoReply'], (result) => {
-        document.getElementById('serverUrl').value = result.serverUrl || 'http://127.0.0.1:6000';
-        document.getElementById('shopToken').value = result.shopToken || '';
-        document.getElementById('autoReply').checked = result.autoReply !== false;
-    });
-    setTimeout(testConnection, 300);
+const enableToggle = document.getElementById('enableToggle');
+const shopTokenInput = document.getElementById('shopTokenInput');
+const serverUrlInput = document.getElementById('serverUrlInput');
+const saveBtn = document.getElementById('saveBtn');
+const statusMsg = document.getElementById('statusMsg');
 
-    document.getElementById('btnSave').addEventListener('click', saveSettings);
-    document.getElementById('btnRecheck').addEventListener('click', testConnection);
-    document.getElementById('btnToggleToken').addEventListener('click', toggleTokenVisibility);
-    document.getElementById('btnDashboard').addEventListener('click', openDashboard);
+// 加载已保存的配置
+chrome.storage.sync.get(['shopToken', 'serverUrl', 'isEnabled'], (result) => {
+  shopTokenInput.value = result.shopToken || '';
+  serverUrlInput.value = result.serverUrl || 'http://8.145.43.255:6000';
+  enableToggle.checked = result.isEnabled !== false;
 });
 
-function saveSettings() {
-    const serverUrl = document.getElementById('serverUrl').value.trim().replace(/\/$/, '');
-    const shopToken = document.getElementById('shopToken').value.trim();
-    const autoReply = document.getElementById('autoReply').checked;
+// 保存配置
+saveBtn.addEventListener('click', () => {
+  const shopToken = shopTokenInput.value.trim();
+  const serverUrl = serverUrlInput.value.trim() || 'http://8.145.43.255:6000';
+  const isEnabled = enableToggle.checked;
 
-    if (!serverUrl) { alert('请填写服务器地址'); return; }
+  if (!shopToken) {
+    showStatus('请填写 Shop Token', 'error');
+    return;
+  }
 
-    chrome.storage.local.set({ serverUrl, shopToken, autoReply }, () => {
-        const btn = document.getElementById('btnSave');
-        btn.textContent = '✅ 已保存';
-        btn.disabled = true;
-        setTimeout(() => { btn.textContent = '💾 保存设置'; btn.disabled = false; }, 1500);
-        testConnection();
-    });
+  chrome.storage.sync.set({ shopToken, serverUrl, isEnabled }, () => {
+    showStatus('✅ 设置已保存', 'success');
+    setTimeout(() => hideStatus(), 3000);
+  });
+});
+
+function showStatus(text, type) {
+  statusMsg.textContent = text;
+  statusMsg.className = `status ${type}`;
 }
 
-function testConnection() {
-    const serverUrl = document.getElementById('serverUrl').value.trim().replace(/\/$/, '') || 'http://127.0.0.1:6000';
-    setStatus('checking', '检测中...');
-    chrome.runtime.sendMessage({ action: 'testConnection', serverUrl }, (response) => {
-        if (chrome.runtime.lastError) { setStatus('disconnected', '插件通信错误'); return; }
-        if (response && response.connected) {
-            setStatus('connected', `已连接 · ${response.system || ''} ${response.version || ''}`);
-        } else {
-            setStatus('disconnected', `未连接 · ${response && response.error ? response.error : '无法连接'}`);
-        }
-    });
-}
-
-function setStatus(type, text) {
-    const dot = document.getElementById('statusDot');
-    const label = document.getElementById('statusText');
-    dot.className = 'status-dot';
-    if (type === 'connected') dot.classList.add('status-connected');
-    else if (type === 'disconnected') dot.classList.add('status-disconnected');
-    else dot.classList.add('status-checking');
-    label.textContent = text;
-}
-
-function toggleTokenVisibility() {
-    const input = document.getElementById('shopToken');
-    input.type = input.type === 'password' ? 'text' : 'password';
-}
-
-function openDashboard() {
-    chrome.storage.local.get(['serverUrl'], (result) => {
-        const url = (result.serverUrl || 'http://127.0.0.1:6000').replace(/\/$/, '');
-        chrome.tabs.create({ url });
-    });
+function hideStatus() {
+  statusMsg.className = 'status hidden';
 }
