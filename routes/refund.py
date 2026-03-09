@@ -269,6 +269,13 @@ def reject(record_id):
         record.is_malicious = True
         _add_to_blacklist(record.buyer_id, record.buyer_name,
                           record.industry_id, f'恶意退款：{record.order_id}', level=2)
+        # 主动删除 Redis 黑名单缓存，保证黑名单实时生效
+        from models.database import redis_client, get_blacklist_cache_key
+        if redis_client:
+            try:
+                redis_client.delete(get_blacklist_cache_key(record.industry_id, record.buyer_id))
+            except Exception:
+                pass
 
     db.session.commit()
     flash(f'已驳回退款（订单：{record.order_id}）', 'success')

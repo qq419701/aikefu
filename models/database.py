@@ -12,6 +12,9 @@ import pytz
 # SQLAlchemy 数据库实例（全局单例）
 db = SQLAlchemy()
 
+# Redis 客户端（全局单例，None 表示 Redis 不可用）
+redis_client = None
+
 # 北京时区
 BEIJING_TZ = pytz.timezone('Asia/Shanghai')
 
@@ -22,6 +25,34 @@ def get_beijing_time():
     返回：北京时间的 datetime 对象
     """
     return datetime.now(BEIJING_TZ).replace(tzinfo=None)
+
+
+def get_blacklist_cache_key(industry_id: int, buyer_id: str) -> str:
+    """生成黑名单 Redis 缓存键（统一格式，避免多处重复）"""
+    return f"blacklist:{industry_id}:{buyer_id}"
+    """
+    初始化 Redis 连接
+    功能：尝试连接 Redis，失败时静默降级（不影响主流程）
+    """
+    global redis_client
+    import config
+    if not config.REDIS_ENABLED:
+        return
+    try:
+        import redis
+        client = redis.from_url(config.REDIS_URL, decode_responses=False,
+                                socket_connect_timeout=3,
+                                socket_timeout=3)
+        client.ping()  # 测试连接
+        redis_client = client
+        import logging
+        logging.getLogger(__name__).info("✅ Redis 连接成功: %s", config.REDIS_URL)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            "⚠️ Redis 连接失败，降级为纯MySQL模式: %s", e
+        )
+        redis_client = None
 
 
 def init_db(app):
@@ -36,6 +67,7 @@ def init_db(app):
     os.makedirs(instance_dir, exist_ok=True)
 
     db.init_app(app)
+    init_redis(app)  # 新增：初始化 Redis
 
     with app.app_context():
         # 提前导入所有模型，确保 create_all 能创建所有表

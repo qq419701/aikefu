@@ -44,12 +44,14 @@ class AIEngine:
 
     def __init__(self):
         """初始化三层引擎、情绪识别器"""
+        from .context_store import ContextStore
         self.rules_engine = RulesEngine()
         self.knowledge_engine = KnowledgeEngine(
             similarity_threshold=config.KNOWLEDGE_SIMILARITY_THRESHOLD
         )
         self.doubao_ai = DoubaoAI()
         self.emotion_detector = EmotionDetector()
+        self.context_store = ContextStore()
 
     def process_message(self, shop_id: int, buyer_id: str, buyer_name: str,
                         message: str, order_id: str = '', msg_type: str = 'text',
@@ -261,8 +263,7 @@ class AIEngine:
 
         # 第三层：豆包AI多轮对话（doubao-lite，有成本）
         system_prompt = shop.get_effective_prompt()
-        context = self._get_or_create_context(shop_id, buyer_id)
-        context_history = context.get_context() if context else []
+        context_history = self.context_store.get_context(shop_id, buyer_id)
 
         ai_result = self.doubao_ai.chat(
             message, system_prompt, industry_id,
@@ -271,14 +272,15 @@ class AIEngine:
         )
 
         # 更新多轮对话上下文
-        if context and ai_result.get('success'):
-            context.add_turn(message, ai_result['reply'],
-                             max_turns=config.MAX_CONTEXT_TURNS)
-            context.last_intent = intent
-            try:
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
+        if ai_result.get('success'):
+            turns = context_history.copy()
+            turns.append({'role': 'user', 'content': message})
+            turns.append({'role': 'assistant', 'content': ai_result['reply']})
+            max_messages = config.MAX_CONTEXT_TURNS * 2
+            if len(turns) > max_messages:
+                turns = turns[-max_messages:]
+            self.context_store.save_context(shop_id, buyer_id, turns,
+                                            timeout_minutes=config.CONTEXT_TIMEOUT_MINUTES)
 
         self._update_message_record(msg_record, 'ai', ai_result.get('tokens', 0))
 
@@ -342,17 +344,41 @@ class AIEngine:
 
     def _check_blacklist(self, buyer_id: str, industry_id: int) -> bool:
         """
-        检查买家是否在黑名单中
+        检查买家是否在黑名单中（Redis缓存，5分钟TTL）
         功能：同一行业的所有店铺共享黑名单
         参数：buyer_id - 买家ID，industry_id - 行业ID
         返回：True=在黑名单中，False=正常
+        注意：Redis 客户端使用 decode_responses=False，缓存值为字节串
         """
+        from models.database import redis_client, get_blacklist_cache_key
+
+        # 优先查 Redis 缓存
+        cache_key = get_blacklist_cache_key(industry_id, buyer_id)
+        if redis_client:
+            try:
+                cached = redis_client.get(cache_key)
+                if cached is not None:
+                    return cached == b'1'
+            except Exception:
+                pass
+
+        # 查 MySQL
         entry = Blacklist.query.filter_by(
             buyer_id=buyer_id,
             industry_id=industry_id,
             is_active=True,
         ).first()
-        return entry is not None
+        result = entry is not None
+
+        # 写入 Redis 缓存
+        if redis_client:
+            try:
+                redis_client.setex(cache_key, config.REDIS_BLACKLIST_CACHE_TTL,
+                                   '1' if result else '0')
+            except Exception:
+                pass
+
+        return result
 
     def _save_incoming_message(self, shop_id, buyer_id, buyer_name, order_id,
                                content, msg_type, image_url, emotion_level,
