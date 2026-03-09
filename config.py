@@ -71,6 +71,17 @@ SQLALCHEMY_ENGINE_OPTIONS = {
 
 
 # ============================================================
+# Redis 配置（用于对话上下文缓存、黑名单缓存、分布式锁）
+# ============================================================
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+REDIS_ENABLED = os.environ.get('REDIS_ENABLED', 'false').lower() == 'true'
+# 分布式锁超时时间（秒）：任务锁持有超过此时间自动释放，防止任务卡死
+REDIS_TASK_LOCK_TTL = int(os.environ.get('REDIS_TASK_LOCK_TTL', '60'))
+# 黑名单缓存 TTL（秒）
+REDIS_BLACKLIST_CACHE_TTL = int(os.environ.get('REDIS_BLACKLIST_CACHE_TTL', '300'))
+
+
+# ============================================================
 # 豆包AI配置（字节跳动火山方舟）
 # 模型分工：
 #   doubao-lite → 意图识别、日常FAQ回复、多轮对话、批量知识生成（速度快成本低）

@@ -18,6 +18,7 @@
 
 import json
 import logging
+import config
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
 from models import Shop
@@ -204,10 +205,25 @@ def get_tasks():
     # 按创建时间升序（先进先出）
     tasks = query.order_by(PluginTask.created_at.asc()).limit(10).all()
 
+    # 使用 Redis 原子锁过滤已被其他客户端锁定的任务
+    from models.database import redis_client
+    result_tasks = []
+    for task in tasks:
+        if redis_client:
+            try:
+                lock_key = f"task_lock:{task.task_id}"
+                acquired = redis_client.set(lock_key, plugin_id or 'default',
+                                            nx=True, ex=config.REDIS_TASK_LOCK_TTL)
+                if not acquired:
+                    continue  # 已被其他客户端锁定，跳过该任务
+            except Exception:
+                pass  # Redis 不可用时降级为不加锁
+        result_tasks.append(task)
+
     return jsonify({
         'success': True,
-        'tasks': [t.to_dict() for t in tasks],
-        'count': len(tasks),
+        'tasks': [t.to_dict() for t in result_tasks],
+        'count': len(result_tasks),
     })
 
 
