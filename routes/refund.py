@@ -8,6 +8,7 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
+from sqlalchemy import case
 from models import RefundRecord, Industry, Shop, Blacklist
 from models.database import db, get_beijing_time
 
@@ -50,12 +51,18 @@ def index():
     if status_filter and status_filter != 'all':
         query = query.filter_by(status=status_filter)
 
-    # 待处理的按紧急程度排序（截止时间最近的排前面）
+    # 待处理的按紧急程度排序（截止时间最近的排前面，NULL排最后）
+    # 使用 case() 替代 .nullslast()，兼容MySQL（MySQL不支持NULLS LAST语法）
     if status_filter == 'pending':
-        refunds = query.order_by(RefundRecord.deadline_at.asc().nullslast(),
-                                 RefundRecord.applied_at.desc()).paginate(
-            page=page, per_page=20
+        deadline_null_last = case(
+            (RefundRecord.deadline_at.is_(None), 1),
+            else_=0
         )
+        refunds = query.order_by(
+            deadline_null_last.asc(),
+            RefundRecord.deadline_at.asc(),
+            RefundRecord.applied_at.desc()
+        ).paginate(page=page, per_page=20)
     else:
         refunds = query.order_by(RefundRecord.applied_at.desc()).paginate(
             page=page, per_page=20
