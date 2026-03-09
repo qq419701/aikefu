@@ -168,8 +168,8 @@ class MaxKBClient:
             score = float(best.get('score', 0))
             meta = best.get('meta', {}) or {}
 
-            # 相似度低于0.6时不返回（避免误匹配）
-            if score < 0.6:
+            # 相似度低于阈值时不返回（避免误匹配，阈值由MAXKB_MIN_SIMILARITY配置）
+            if score < config.MAXKB_MIN_SIMILARITY:
                 logger.debug(f"[MaxKB] 检索命中但相似度不足: score={score:.2f}")
                 return None
 

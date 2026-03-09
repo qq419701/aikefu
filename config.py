@@ -269,3 +269,7 @@ MAXKB_API_KEY = os.environ.get('MAXKB_API_KEY', '')
 # MaxKB数据集ID（在MaxKB后台创建数据集后获取）
 MAXKB_DATASET_ID = os.environ.get('MAXKB_DATASET_ID', '')
 
+# MaxKB语义检索最低相似度阈值（低于此分数不返回结果，避免误匹配）
+# 范围：0.0-1.0，默认0.6（可通过环境变量调整）
+MAXKB_MIN_SIMILARITY = float(os.environ.get('MAXKB_MIN_SIMILARITY', '0.6'))
+

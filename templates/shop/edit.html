@@ -96,8 +96,16 @@
 /* 复制shop_token到剪贴板 */
 function copyToken() {
     var val = document.getElementById('shop-token-val').textContent;
+    var btn = event.currentTarget;
     navigator.clipboard.writeText(val).then(function() {
-        alert('Token已复制到剪贴板');
+        // 显示复制成功提示（临时改变按钮文字）
+        var original = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check-circle text-success"></i> 已复制';
+        btn.disabled = true;
+        setTimeout(function() {
+            btn.innerHTML = original;
+            btn.disabled = false;
+        }, 2000);
     }).catch(function() {
         // 降级：使用老方法
         var el = document.createElement('textarea');
@@ -106,7 +114,8 @@ function copyToken() {
         el.select();
         document.execCommand('copy');
         document.body.removeChild(el);
-        alert('Token已复制');
+        btn.innerHTML = '<i class="bi bi-check-circle text-success"></i> 已复制';
+        setTimeout(function() { location.reload(); }, 1500);
     });
 }
 </script>

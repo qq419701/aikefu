@@ -185,10 +185,10 @@ def push_orders():
                 order_id=order_id,
             ).first()
 
-            # 处理金额（可能是分或元，统一转为数值）
+            # 处理金额（客户端推送的amount字段含义不固定，尽量保持原始值）
             amount_raw = order_item.get('amount', 0)
             try:
-                amount = float(amount_raw) / 100 if int(amount_raw) > 10000 else float(amount_raw)
+                amount = float(amount_raw)
             except Exception:
                 amount = 0.0
 
