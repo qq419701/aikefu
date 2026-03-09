@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}意图规则管理{% endblock %}
+{% block page_title %}意图规则管理{% endblock %}
+{% block page_subtitle %}自定义关键词触发规则，替代代码中的硬编码配置，可热更新{% endblock %}
+
+{% block content %}
+<!-- 操作栏 -->
+<div class="d-flex justify-content-between align-items-center mb-3"
+     data-toggle-url-tpl="{{ url_for('intent_rule.toggle', rule_id=0) }}">
+    <div class="d-flex gap-2 align-items-center">
+        <!-- 行业筛选（仅管理员可见） -->
+        {% if current_user.is_admin() %}
+        <form method="GET" class="d-flex gap-2 align-items-center">
+            <select class="form-select form-select-sm" name="industry_id" onchange="this.form.submit()"
+                    style="min-width:140px;">
+                <option value="">全部行业</option>
+                <option value="global" {% if industry_filter == 'global' %}selected{% endif %}>🌐 全局规则</option>
+                {% for ind in industries %}
+                <option value="{{ ind.id }}"
+                        {% if industry_filter == ind.id|string %}selected{% endif %}>
+                    {{ ind.icon }} {{ ind.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </form>
+        {% endif %}
+        <span class="text-muted small">共 {{ rules|length }} 条规则</span>
+    </div>
+    <a href="{{ url_for('intent_rule.add') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle"></i> 新增规则
+    </a>
+</div>
+
+<!-- 规则列表 -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white">
+        <h6 class="mb-0 fw-semibold">🎯 意图识别规则列表</h6>
+    </div>
+    <div class="card-body p-0">
+        {% if rules %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:5%">优先级</th>
+                        <th style="width:12%">意图名称</th>
+                        <th style="width:8%">意图标识</th>
+                        <th style="width:25%">触发关键词</th>
+                        <th style="width:10%">插件动作码</th>
+                        <th style="width:15%">立即回复话术</th>
+                        <th style="width:10%">所属行业</th>
+                        <th style="width:7%">状态</th>
+                        <th style="width:8%">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rule in rules %}
+                    <tr id="rule-row-{{ rule.id }}"
+                        class="{% if not rule.is_active %}opacity-50{% endif %}">
+                        <!-- 优先级 -->
+                        <td class="text-center">
+                            <span class="badge bg-light text-dark border">{{ rule.priority }}</span>
+                        </td>
+                        <!-- 意图名称 -->
+                        <td>
+                            <span class="fw-semibold">{{ rule.intent_name }}</span>
+                        </td>
+                        <!-- 意图标识码 -->
+                        <td><code class="small">{{ rule.intent_code }}</code></td>
+                        <!-- 触发关键词 -->
+                        <td>
+                            {% for kw in rule.get_keywords() %}
+                            <span class="badge bg-secondary me-1 mb-1">{{ kw }}</span>
+                            {% endfor %}
+                        </td>
+                        <!-- 插件动作码 -->
+                        <td>
+                            {% if rule.action_code %}
+                            <span class="badge bg-primary">{{ rule.action_code }}</span>
+                            {% else %}
+                            <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        <!-- 立即回复话术预览 -->
+                        <td>
+                            {% if rule.auto_reply_tpl %}
+                            <span class="text-truncate d-inline-block small" style="max-width:180px;"
+                                  title="{{ rule.auto_reply_tpl }}">
+                                {{ rule.auto_reply_tpl }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        <!-- 所属行业 -->
+                        <td>
+                            {% if rule.industry %}
+                            <span class="small">{{ rule.industry.icon }} {{ rule.industry.name }}</span>
+                            {% else %}
+                            <span class="badge bg-info text-dark small">🌐 全局</span>
+                            {% endif %}
+                        </td>
+                        <!-- 启用状态 -->
+                        <td>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input toggle-switch" type="checkbox"
+                                       data-rule-id="{{ rule.id }}"
+                                       {% if rule.is_active %}checked{% endif %}
+                                       title="{{ '禁用' if rule.is_active else '启用' }}">
+                            </div>
+                        </td>
+                        <!-- 操作按钮 -->
+                        <td>
+                            <div class="d-flex gap-1">
+                                <a href="{{ url_for('intent_rule.edit', rule_id=rule.id) }}"
+                                   class="btn btn-sm btn-outline-secondary" title="编辑">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <form method="POST"
+                                      action="{{ url_for('intent_rule.delete', rule_id=rule.id) }}"
+                                      onsubmit="return confirm('确认删除规则「{{ rule.intent_name }}」？删除后无法恢复')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="删除">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-list-check fs-1 opacity-25"></i>
+            <p class="mt-2">暂无意图规则</p>
+            <a href="{{ url_for('intent_rule.add') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle"></i> 立即创建
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 说明卡片 -->
+<div class="card border-0 shadow-sm mt-4">
+    <div class="card-header bg-white">
+        <h6 class="mb-0 fw-semibold">📖 使用说明</h6>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <h6 class="text-primary"><i class="bi bi-search"></i> 关键词匹配</h6>
+                <p class="small text-muted">
+                    买家消息命中任一关键词即触发该规则。
+                    按<strong>优先级升序</strong>匹配，数字越小越先匹配。
+                    行业规则优先于全局规则。
+                </p>
+            </div>
+            <div class="col-md-4">
+                <h6 class="text-success"><i class="bi bi-puzzle"></i> 插件动作码</h6>
+                <p class="small text-muted">
+                    填写后，命中规则时会向客户端（dskehuduan）下发任务。
+                    <strong>立即回复话术</strong>会作为下发成功后立即发给买家的消息。
+                </p>
+            </div>
+            <div class="col-md-4">
+                <h6 class="text-warning"><i class="bi bi-check2-circle"></i> 完成回复话术</h6>
+                <p class="small text-muted">
+                    客户端完成任务后，话术中的 <code>{变量名}</code> 会被插件返回的结果自动填充。
+                    例如：<code>换号完成！新账号：{new_account}</code>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .toggle-switch { cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 启用/禁用切换（AJAX）
+var toggleUrlTpl = document.querySelector('[data-toggle-url-tpl]').dataset.toggleUrlTpl;
+document.querySelectorAll('.toggle-switch').forEach(function(el) {
+    el.addEventListener('change', function() {
+        var ruleId = this.dataset.ruleId;
+        var row = document.getElementById('rule-row-' + ruleId);
+        var url = toggleUrlTpl.replace('/0/', '/' + ruleId + '/');
+        fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (data.is_active) {
+                    row.classList.remove('opacity-50');
+                } else {
+                    row.classList.add('opacity-50');
+                }
+            } else {
+                alert('操作失败：' + (data.message || '未知错误'));
+                el.checked = !el.checked;  // 回滚勾选状态
+            }
+        })
+        .catch(function() {
+            alert('网络错误，请重试');
+            el.checked = !el.checked;
+        });
+    });
+});
+</script>
+{% endblock %}

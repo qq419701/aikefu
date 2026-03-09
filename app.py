@@ -70,6 +70,7 @@ def create_app():
     from routes.risk import risk_bp
     from routes.pdd_orders import pdd_orders_bp
     from routes.plugin import plugin_bp, plugin_api_bp
+    from routes.intent_rule import intent_rule_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -88,6 +89,8 @@ def create_app():
     app.register_blueprint(plugin_api_bp, url_prefix='/api/plugin')
     # 插件管理后台页面：路径为 /plugins/、/plugins/tasks
     app.register_blueprint(plugin_bp, url_prefix='/plugins')
+    # 意图规则管理：路径为 /intent-rules/
+    app.register_blueprint(intent_rule_bp, url_prefix='/intent-rules')
 
     # ---- 启动定时任务调度器 ----
     from modules.scheduler import TaskScheduler
