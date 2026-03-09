@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block page_subtitle %}配置关键词触发规则，自动联动客户端插件和回复话术{% endblock %}
+
+{% block content %}
+<div class="card border-0 shadow-sm" style="max-width: 860px;">
+    <div class="card-body p-4">
+        <form method="POST">
+            <div class="row g-3">
+
+                <!-- 所属行业 -->
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">所属行业</label>
+                    <select class="form-select" name="industry_id">
+                        <option value="">🌐 全局规则（所有行业共用）</option>
+                        {% for ind in industries %}
+                        <option value="{{ ind.id }}"
+                            {% if rule and rule.industry_id == ind.id %}selected
+                            {% elif not rule and not current_user.is_admin() and current_user.industry_id == ind.id %}selected
+                            {% endif %}>
+                            {{ ind.icon }} {{ ind.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">全局规则对所有行业生效；行业规则优先于全局规则</div>
+                </div>
+
+                <!-- 优先级 -->
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">优先级</label>
+                    <input type="number" class="form-control" name="priority"
+                           value="{{ rule.priority if rule else 0 }}" min="0" max="999">
+                    <div class="form-text">数字越小越先匹配</div>
+                </div>
+
+                <!-- 是否启用 -->
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" name="is_active" value="1"
+                               id="isActiveSwitch"
+                               {% if rule is none or rule.is_active %}checked{% endif %}>
+                        <label class="form-check-label fw-semibold" for="isActiveSwitch">启用此规则</label>
+                    </div>
+                </div>
+
+                <!-- 意图标识 -->
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">意图标识 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="intent_code" required
+                           value="{{ rule.intent_code if rule else '' }}"
+                           placeholder="如：exchange / refund / login"
+                           pattern="[a-zA-Z0-9_]+" title="只允许英文字母、数字和下划线">
+                    <div class="form-text">程序内部使用，只允许英文字母/数字/下划线</div>
+                </div>
+
+                <!-- 意图名称 -->
+                <div class="col-md-8">
+                    <label class="form-label fw-semibold">意图名称 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="intent_name" required
+                           value="{{ rule.intent_name if rule else '' }}"
+                           placeholder="如：换号请求 / 退款申请">
+                    <div class="form-text">后台管理界面显示的中文名称</div>
+                </div>
+
+                <!-- 触发关键词 -->
+                <div class="col-12">
+                    <label class="form-label fw-semibold">触发关键词 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" name="keywords" required
+                           value="{{ rule.get_keywords()|join(',') if rule else '' }}"
+                           placeholder="换号,换个,换账号,换个号">
+                    <div class="form-text">
+                        多个关键词用<strong>英文逗号</strong>分隔，买家消息包含任意一个即触发
+                    </div>
+                </div>
+
+                <!-- 插件动作码 -->
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">插件动作码</label>
+                    <div class="input-group">
+                        <select class="form-select" name="action_code" id="actionCodeSelect"
+                                onchange="syncActionInput(this)">
+                            <option value="">— 无动作（纯意图识别）—</option>
+                            {% for code in action_codes %}
+                            <option value="{{ code }}"
+                                    {% if rule and rule.action_code == code %}selected{% endif %}>
+                                {{ code }}
+                            </option>
+                            {% endfor %}
+                            <option value="__custom__"
+                                    {% if rule and rule.action_code and rule.action_code not in action_codes %}selected{% endif %}>
+                                手动输入…
+                            </option>
+                        </select>
+                    </div>
+                    <!-- 手动输入框（选"手动输入"时显示） -->
+                    <input type="text" class="form-control mt-1" id="actionCodeCustom"
+                           name="action_code_custom"
+                           placeholder="输入自定义动作码，如 auto_exchange"
+                           value="{{ rule.action_code if rule and rule.action_code and rule.action_code not in action_codes else '' }}"
+                           style="display:{% if rule and rule.action_code and rule.action_code not in action_codes %}block{% else %}none{% endif %}">
+                    <div class="form-text">选择已注册插件支持的动作；无插件时可手动填写预留动作码</div>
+                </div>
+
+                <!-- 空列占位 -->
+                <div class="col-md-6"></div>
+
+                <!-- 立即回复话术 -->
+                <div class="col-12">
+                    <label class="form-label fw-semibold">立即回复话术</label>
+                    <textarea class="form-control" name="auto_reply_tpl" rows="2"
+                              placeholder="如：好的，正在为您自动换号，请稍候～">{{ rule.auto_reply_tpl or '' if rule else '' }}</textarea>
+                    <div class="form-text">
+                        命中规则且插件任务下发成功后，<strong>立即</strong>发送给买家的消息
+                    </div>
+                </div>
+
+                <!-- 完成回复话术 -->
+                <div class="col-12">
+                    <label class="form-label fw-semibold">完成回复话术</label>
+                    <textarea class="form-control" name="done_reply_tpl" rows="2"
+                              placeholder="如：换号完成！新账号：{new_account}，如有问题请联系我们😊">{{ rule.done_reply_tpl or '' if rule else '' }}</textarea>
+                    <div class="form-text">
+                        客户端上报任务完成后自动发送。支持 <code>{变量名}</code> 占位符，
+                        由客户端返回的 result 字典填充（如 <code>{new_account}</code>、<code>{order_id}</code>）
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 提示信息 -->
+            <div class="alert alert-info mt-3 small">
+                <i class="bi bi-lightbulb"></i>
+                <strong>工作流程：</strong>买家消息命中关键词 →
+                {% if rule and rule.action_code %}下发「{{ rule.action_code }}」插件任务 → 立即回复话术发给买家 → 客户端执行 → 完成回复话术发给买家{% else %}识别意图，AI继续处理消息{% endif %}
+            </div>
+
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i>
+                    {{ '保存修改' if rule else '创建规则' }}
+                </button>
+                <a href="{{ url_for('intent_rule.index') }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 动作码下拉与手动输入联动
+function syncActionInput(select) {
+    var custom = document.getElementById('actionCodeCustom');
+    if (select.value === '__custom__') {
+        custom.style.display = 'block';
+        custom.required = true;
+    } else {
+        custom.style.display = 'none';
+        custom.required = false;
+        custom.value = '';
+    }
+}
+
+// 提交时将正确的 action_code 写入隐藏字段
+document.querySelector('form').addEventListener('submit', function(e) {
+    var select = document.getElementById('actionCodeSelect');
+    var custom = document.getElementById('actionCodeCustom');
+    if (select.value === '__custom__') {
+        // 用自定义输入值替换 select 的值
+        var hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'action_code';
+        hiddenInput.value = custom.value.trim();
+        this.appendChild(hiddenInput);
+        select.name = '';  // 取消 select 的 name，避免重复提交
+    }
+    // 若 select 值为空（无动作），action_code 提交空字符串，后端处理为 NULL
+});
+</script>
+{% endblock %}

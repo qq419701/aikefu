@@ -150,6 +150,13 @@
             </li>
 
             <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'intent_rule' %}active{% endif %}"
+                   href="{{ url_for('intent_rule.index') }}">
+                    <i class="bi bi-diagram-3"></i>🎯 意图规则
+                </a>
+            </li>
+
+            <li class="nav-item">
                 <a class="nav-link {% if request.blueprint == 'risk' %}active{% endif %}"
                    href="{{ url_for('risk.index') }}">
                     <i class="bi bi-shield-exclamation"></i>🛡️ 风险管理

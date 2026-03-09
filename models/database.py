@@ -38,6 +38,9 @@ def init_db(app):
     db.init_app(app)
 
     with app.app_context():
+        # 提前导入所有模型，确保 create_all 能创建所有表
+        from .intent_rule import IntentRule  # noqa: F401
+
         # 创建所有数据表
         db.create_all()
 
@@ -48,10 +51,11 @@ def init_db(app):
 def _insert_default_data(app):
     """
     插入默认初始数据
-    功能：系统首次运行时，插入预置行业和默认管理员账号
+    功能：系统首次运行时，插入预置行业、默认管理员账号和意图规则
     """
     from .industry import Industry
     from .user import User
+    from .intent_rule import IntentRule
     from config import DEFAULT_INDUSTRIES
     from werkzeug.security import generate_password_hash
 
@@ -82,5 +86,81 @@ def _insert_default_data(app):
             created_at=get_beijing_time()
         )
         db.session.add(admin)
+
+    db.session.commit()
+
+    # 插入默认意图规则（表为空时插入，对应原代码中的硬编码规则）
+    _init_intent_rules()
+
+
+def _init_intent_rules():
+    """
+    初始化默认意图规则
+    功能：当 intent_rules 表为空时，插入原 ai_engine.py 中硬编码的默认规则
+    说明：这些规则替代了原来的 LOCAL_INTENT_RULES 和 PLUGIN_INTENT_ACTIONS
+    """
+    from .intent_rule import IntentRule
+
+    # 已有规则，跳过初始化
+    if IntentRule.query.count() > 0:
+        return
+
+    # 默认意图规则数据
+    # 格式：(intent_code, intent_name, keywords, action_code, auto_reply_tpl, done_reply_tpl, priority)
+    DEFAULT_INTENT_RULES = [
+        (
+            'exchange', '换号请求',
+            ['换号', '换个', '重新给', '换一个', '换账号', '换个号', '换货'],
+            'auto_exchange',
+            '好的，正在为您自动换号，请稍候～',
+            '换号完成！新账号：{new_account}，如有问题请联系我们😊',
+            0,
+        ),
+        (
+            'refund', '退款申请',
+            ['退款', '退钱', '不要了', '申请退', '退货', '要退'],
+            'handle_refund',
+            '您的退款申请已收到，正在处理中～',
+            '',
+            1,
+        ),
+        (
+            'login', '登录问题',
+            ['登不上', '进不去', '密码', '登录失败', '打不开', '登录不了', '进不了'],
+            '', '', '', 2,
+        ),
+        (
+            'complaint', '投诉举报',
+            ['投诉', '举报', '差评', '太差', '骗人', '骗子', '维权'],
+            '', '', '', 3,
+        ),
+        (
+            'query', '查询咨询',
+            ['多久', '什么时候', '怎么', '如何', '能不能', '可以吗', '会不会'],
+            '', '', '', 4,
+        ),
+        (
+            'payment', '付款问题',
+            ['付款', '付钱', '怎么付', '支付', '怎么买', '如何付'],
+            '', '', '', 5,
+        ),
+    ]
+
+    import json
+    now = get_beijing_time()
+    for intent_code, intent_name, keywords, action_code, auto_reply_tpl, done_reply_tpl, priority in DEFAULT_INTENT_RULES:
+        rule = IntentRule(
+            industry_id=None,           # 全局规则
+            intent_code=intent_code,
+            intent_name=intent_name,
+            keywords=json.dumps(keywords, ensure_ascii=False),
+            action_code=action_code or None,
+            auto_reply_tpl=auto_reply_tpl or None,
+            done_reply_tpl=done_reply_tpl or None,
+            priority=priority,
+            is_active=True,
+            created_at=now,
+        )
+        db.session.add(rule)
 
     db.session.commit()

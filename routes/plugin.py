@@ -215,13 +215,23 @@ def get_tasks():
 def task_done(task_id: int):
     """
     客户端上报任务完成
-    功能：客户端执行成功后，调用此接口上报结果
+    功能：客户端执行成功后，调用此接口上报结果；
+          aikefu 自动根据 intent_rules.done_reply_tpl 生成买家回复话术，
+          通过响应中的 reply_to_buyer 字段返回，客户端负责将其发送给买家
     鉴权：X-Shop-Token请求头
     请求格式（JSON）：
     {
-        "result": {"success": true, "message": "换号成功，新账号：xxx"}
+        "result": {
+            "success": true,
+            "new_account": "账号----密码",
+            "message": "换号成功"
+        }
     }
-    返回：{'success': true}
+    返回：
+    {
+        "success": true,
+        "reply_to_buyer": "换号完成！新账号：xxx（话术模板填充后），空字符串表示无需回复"
+    }
     """
     shop = _get_shop_by_token()
     if not shop:
@@ -239,10 +249,30 @@ def task_done(task_id: int):
     task.result = json.dumps(result, ensure_ascii=False)
     task.done_at = get_beijing_time()
 
+    # 根据 action_code 查找对应意图规则，生成完成回复话术
+    reply_to_buyer = ''
+    try:
+        from models.intent_rule import IntentRule
+        from models.database import db as _db
+        rule = IntentRule.query.filter(
+            IntentRule.action_code == task.action_code,
+            IntentRule.is_active == True,
+        ).order_by(IntentRule.priority.asc()).first()
+        if rule and rule.done_reply_tpl:
+            # 用任务结果填充话术模板变量（如 {new_account}, {order_id}）
+            reply_to_buyer = rule.get_reply_for_done(result)
+    except Exception as e:
+        logger.warning(f"[插件任务] 获取完成话术失败: task_id={task_id}, error={e}")
+
     try:
         db.session.commit()
-        logger.info(f"[插件任务] 完成: task_id={task_id}, action={task.action_code}")
-        return jsonify({'success': True, 'message': '任务已标记为完成'})
+        logger.info(f"[插件任务] 完成: task_id={task_id}, action={task.action_code}, "
+                    f"has_reply={bool(reply_to_buyer)}")
+        return jsonify({
+            'success': True,
+            'message': '任务已标记为完成',
+            'reply_to_buyer': reply_to_buyer,
+        })
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500

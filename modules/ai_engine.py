@@ -28,28 +28,11 @@ from models.database import db, get_beijing_time
 import config
 
 # ----------------------------------------------------------------
-# 本地意图识别规则（0成本，0延迟，覆盖80%场景）
-# 说明：先做本地规则匹配，命中直接返回意图，不调豆包API
-#       未命中才调豆包lite识别（有成本）
-# 优点：减少80%的意图识别API调用成本
+# 注意：意图识别规则已从代码迁移到数据库（intent_rules 表）
+# 运营可在后台 /intent-rules/ 页面自定义关键词和触发动作，无需修改代码
+# 原 LOCAL_INTENT_RULES 和 PLUGIN_INTENT_ACTIONS 现由数据库规则替代
+# 数据库初始化时会自动插入等效的默认规则（见 models/database.py）
 # ----------------------------------------------------------------
-LOCAL_INTENT_RULES = {
-    'refund':    ['退款', '退钱', '不要了', '申请退', '退货', '要退'],
-    'exchange':  ['换号', '换个', '重新给', '换一个', '换账号', '换个号', '换货'],
-    'login':     ['登不上', '进不去', '密码', '登录失败', '打不开', '登录不了', '进不了'],
-    'complaint': ['投诉', '举报', '差评', '太差', '骗人', '骗子', '维权'],
-    'query':     ['多久', '什么时候', '怎么', '如何', '能不能', '可以吗', '会不会'],
-    'payment':   ['付款', '付钱', '怎么付', '支付', '怎么买', '如何付'],
-}
-
-# ----------------------------------------------------------------
-# 需要客户端插件处理的意图（触发插件任务下发）
-# 说明：当AI识别到这些意图时，同时创建PluginTask等待客户端执行
-# ----------------------------------------------------------------
-PLUGIN_INTENT_ACTIONS = {
-    'exchange': 'auto_exchange',   # 换号意图 → 自动换号插件
-    'refund': 'handle_refund',     # 退款意图 → 退款处理插件（可选）
-}
 
 
 class AIEngine:
@@ -113,12 +96,13 @@ class AIEngine:
         emotion_level = emotion['level']
         needs_human = emotion['needs_human'] or is_blacklisted
 
-        # 3. 意图识别：先本地规则（0成本），未命中再调豆包（有成本）
-        intent = self._recognize_intent_local(message)
+        # 3. 意图识别：先本地规则（从数据库读取，可热更新），未命中再调豆包（有成本）
+        intent, action_code = self._recognize_intent_local(message, industry_id)
         if intent == 'other' and config.DOUBAO_API_KEY:
             # 本地未命中，调用豆包lite识别（有成本）
             intent_result = self.doubao_ai.recognize_intent(message)
             intent = intent_result.get('intent', 'other')
+            action_code = None  # 豆包意图识别不关联插件动作码
 
         # 4. 初始化消息记录
         msg_record = self._save_incoming_message(
@@ -158,8 +142,40 @@ class AIEngine:
                 'success': True,
             }
 
+        # 5.5 如果意图有插件动作码，优先下发插件任务并返回立即回复话术
+        # 说明：action_code 来自数据库 intent_rules 表（可热更新）
+        if action_code:
+            # 获取立即回复话术模板
+            auto_reply_tpl = self._get_auto_reply_tpl(intent, action_code, industry_id)
+            # 尝试下发插件任务
+            dispatched = False
+            try:
+                dispatched = self._dispatch_plugin_task(
+                    shop_id=shop_id,
+                    intent=intent,
+                    action_code=action_code,
+                    buyer_id=buyer_id,
+                    order_id=order_id,
+                    message=message,
+                )
+            except Exception:
+                pass
+            # 下发成功且有立即回复模板 → 立即回复买家，跳过AI处理
+            if dispatched and auto_reply_tpl:
+                self._update_message_record(msg_record, 'plugin', 0)
+                return {
+                    'reply': auto_reply_tpl,
+                    'process_by': 'plugin',
+                    'needs_human': False,
+                    'emotion_level': emotion_level,
+                    'intent': intent,
+                    'action': action_code,
+                    'success': True,
+                }
+
         # 6. 退款意图 → 直接走退款决策流程（doubao-pro）
-        if intent == 'refund' and config.DOUBAO_API_KEY:
+        # 说明：只有在没有插件接管退款时才走此流程
+        if intent == 'refund' and not action_code and config.DOUBAO_API_KEY:
             # 优先从PddOrder表查询真实订单数据，提升退款决策质量
             order_info = self._get_order_info_string(shop_id, order_id)
             refund_result = self.doubao_ai.handle_refund_decision(
@@ -277,19 +293,6 @@ class AIEngine:
             )
         except Exception:
             pass  # 学习触发失败不影响正常回复
-
-        # 如果意图需要插件处理，下发插件任务
-        if intent in PLUGIN_INTENT_ACTIONS:
-            try:
-                self._dispatch_plugin_task(
-                    shop_id=shop_id,
-                    intent=intent,
-                    buyer_id=buyer_id,
-                    order_id=order_id,
-                    message=message,
-                )
-            except Exception:
-                pass  # 插件任务下发失败不影响正常回复
 
         return {
             'reply': ai_result['reply'],
@@ -465,21 +468,63 @@ class AIEngine:
 
         db.session.commit()
 
-    def _recognize_intent_local(self, message: str) -> str:
+    def _recognize_intent_local(self, message: str, industry_id: int = None) -> tuple:
         """
-        本地意图识别（0成本，0延迟，覆盖80%场景）
-        功能：使用关键词规则快速判断买家消息的意图，无需调用AI API
-        参数：message - 买家消息文本
-        返回：意图类型字符串（refund/exchange/login/complaint/query/payment/other）
-        说明：命中规则直接返回；未命中返回'other'，由调用方决定是否调用豆包识别
+        本地意图识别（从数据库读取规则，可热更新）
+        功能：使用数据库中的关键词规则快速判断买家消息的意图，无需调用AI API
+        参数：
+            message     - 买家消息文本
+            industry_id - 行业ID（优先匹配行业规则，再匹配全局规则）
+        返回：(intent_code, action_code) 元组
+            intent_code - 意图类型（如 refund/exchange/login/other）
+            action_code - 对应的插件动作码（如 auto_exchange），无则为 None
+        说明：命中规则直接返回；未命中返回 ('other', None)，由调用方决定是否调用豆包识别
         """
+        from models.intent_rule import IntentRule
         msg_lower = message.lower()
-        for intent, keywords in LOCAL_INTENT_RULES.items():
-            for kw in keywords:
+
+        # 查询所有启用的规则：先行业规则，再全局规则（NULL industry_id），按优先级升序
+        rules = IntentRule.query.filter(
+            IntentRule.is_active == True,
+            db.or_(
+                IntentRule.industry_id == industry_id,
+                IntentRule.industry_id == None,  # noqa: E711
+            )
+        ).order_by(IntentRule.priority.asc()).all()
+
+        for rule in rules:
+            for kw in rule.get_keywords():
                 if kw in msg_lower:
-                    return intent
+                    return rule.intent_code, rule.action_code
+
         # 本地未命中，返回other（调用方可继续调豆包）
-        return 'other'
+        return 'other', None
+
+    def _get_auto_reply_tpl(self, intent_code: str, action_code: str,
+                            industry_id: int = None) -> str:
+        """
+        获取意图的立即回复话术模板
+        功能：根据意图码和动作码查找对应的 auto_reply_tpl
+        参数：
+            intent_code - 意图码
+            action_code - 插件动作码
+            industry_id - 行业ID
+        返回：话术模板字符串；不存在则返回空字符串
+        """
+        try:
+            from models.intent_rule import IntentRule
+            rule = IntentRule.query.filter(
+                IntentRule.intent_code == intent_code,
+                IntentRule.action_code == action_code,
+                IntentRule.is_active == True,
+                db.or_(
+                    IntentRule.industry_id == industry_id,
+                    IntentRule.industry_id == None,  # noqa: E711
+                )
+            ).order_by(IntentRule.priority.asc()).first()
+            return (rule.auto_reply_tpl or '') if rule else ''
+        except Exception:
+            return ''
 
     def _check_learning_trigger(self, message: str, reply: str,
                                 shop_id: int, industry_id: int):
@@ -556,27 +601,24 @@ class AIEngine:
         db.session.add(record)
         db.session.commit()
 
-    def _dispatch_plugin_task(self, shop_id: int, intent: str,
-                              buyer_id: str, order_id: str, message: str):
+    def _dispatch_plugin_task(self, shop_id: int, intent: str, action_code: str,
+                              buyer_id: str, order_id: str, message: str) -> bool:
         """
         下发插件任务到任务队列
         功能：当意图识别为需要客户端操作的意图（如exchange/refund）时，
               创建PluginTask记录，等待客户端（dskehuduan）轮询获取并执行
         参数：
-            shop_id  - 店铺ID
-            intent   - 意图类型（exchange/refund等）
-            buyer_id - 买家ID（任务参数）
-            order_id - 订单号（任务参数）
-            message  - 买家原始消息（任务参数）
+            shop_id    - 店铺ID
+            intent     - 意图类型（exchange/refund等）
+            action_code - 插件动作码（如 auto_exchange），直接传入，不再从硬编码字典查
+            buyer_id   - 买家ID（任务参数）
+            order_id   - 订单号（任务参数）
+            message    - 买家原始消息（任务参数）
+        返回：True=任务下发成功，False=无可用插件或下发失败
         说明：客户端通过 GET /api/plugin/tasks 轮询获取待执行任务
         """
         import json
         from models.plugin import ClientPlugin, PluginTask
-
-        # 获取该意图对应的动作码
-        action_code = PLUGIN_INTENT_ACTIONS.get(intent)
-        if not action_code:
-            return
 
         # 查找该店铺中支持此动作的在线插件
         plugins = ClientPlugin.query.filter_by(
@@ -591,8 +633,8 @@ class AIEngine:
                 break
 
         if not target_plugin:
-            # 没有可用的插件，不下发任务
-            return
+            # 没有可用的在线插件，不下发任务
+            return False
 
         # 创建插件任务记录
         task = PluginTask(
@@ -610,4 +652,5 @@ class AIEngine:
         )
         db.session.add(task)
         db.session.commit()
+        return True
 
