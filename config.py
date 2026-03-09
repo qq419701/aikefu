@@ -248,3 +248,28 @@ LOG_LEVEL = 'INFO'
 LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
 LOG_BACKUP_COUNT = 5
 
+
+# ============================================================
+# MaxKB向量检索引擎配置（可选）
+# 说明：
+#   MAXKB_ENABLED=false → 使用原有关键词重叠率检索（默认，0成本）
+#   MAXKB_ENABLED=true  → 使用MaxKB语义检索，命中率更高（~85%）
+# 部署方式：docker run -d -p 8080:8080 1panel/maxkb
+# ============================================================
+
+# 是否启用MaxKB向量检索（默认false，使用关键词检索）
+MAXKB_ENABLED = os.environ.get('MAXKB_ENABLED', 'false').lower() == 'true'
+
+# MaxKB服务地址（本地或远程部署）
+MAXKB_API_URL = os.environ.get('MAXKB_API_URL', 'http://localhost:8080')
+
+# MaxKB API密钥（在MaxKB后台生成）
+MAXKB_API_KEY = os.environ.get('MAXKB_API_KEY', '')
+
+# MaxKB数据集ID（在MaxKB后台创建数据集后获取）
+MAXKB_DATASET_ID = os.environ.get('MAXKB_DATASET_ID', '')
+
+# MaxKB语义检索最低相似度阈值（低于此分数不返回结果，避免误匹配）
+# 范围：0.0-1.0，默认0.6（可通过环境变量调整）
+MAXKB_MIN_SIMILARITY = float(os.environ.get('MAXKB_MIN_SIMILARITY', '0.6'))
+

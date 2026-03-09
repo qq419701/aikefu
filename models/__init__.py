@@ -14,9 +14,10 @@ from .blacklist import Blacklist
 from .rule import Rule
 from .stats import DailyStats
 from .conversation import ConversationContext
-from .refund import RefundRecord
+# RefundRecord 不再导出（退款管理模块已删除），但保留 models/refund.py 防止数据库迁移报错
 from .learning import LearningRecord
 from .pdd_order import PddOrder
+from .plugin import ClientPlugin, PluginTask
 
 __all__ = [
     'db', 'init_db',
@@ -28,7 +29,7 @@ __all__ = [
     'Rule',
     'DailyStats',
     'ConversationContext',
-    'RefundRecord',
     'LearningRecord',
     'PddOrder',
+    'ClientPlugin', 'PluginTask',
 ]

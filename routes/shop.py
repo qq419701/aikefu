@@ -64,11 +64,7 @@ def add():
         industry_id = request.form.get('industry_id', type=int)
         platform = request.form.get('platform', 'pdd')
         platform_shop_id = request.form.get('platform_shop_id', '').strip()
-        client_id = request.form.get('client_id', '').strip()
-        client_secret = request.form.get('client_secret', '').strip()
-        auto_exchange = 'auto_exchange_enabled' in request.form
-        uzuzu_account = request.form.get('uzuzu_account', '').strip()
-        uzuzu_password = request.form.get('uzuzu_password', '').strip()
+        auto_reply = 'auto_reply_enabled' in request.form
         note = request.form.get('note', '').strip()
 
         if not name or not industry_id:
@@ -85,16 +81,13 @@ def add():
             industry_id=industry_id,
             platform=platform,
             platform_shop_id=platform_shop_id,
-            client_id=client_id,
-            client_secret=client_secret,
-            auto_exchange_enabled=auto_exchange,
-            uzuzu_account=uzuzu_account,
-            uzuzu_password=uzuzu_password,
+            auto_reply_enabled=auto_reply,
             note=note,
-            auto_reply_enabled=True,
             is_active=True,
             created_at=get_beijing_time(),
         )
+        # 自动生成shop_token（用于客户端插件鉴权）
+        shop.generate_token()
         db.session.add(shop)
         db.session.commit()
 
@@ -131,24 +124,14 @@ def edit(shop_id):
         shop.name = request.form.get('name', shop.name).strip()
         shop.platform = request.form.get('platform', shop.platform)
         shop.platform_shop_id = request.form.get('platform_shop_id', '').strip()
-        shop.client_id = request.form.get('client_id', '').strip()
-
-        # 密码/密钥只在有输入时更新
-        new_secret = request.form.get('client_secret', '').strip()
-        if new_secret:
-            shop.client_secret = new_secret
-
         shop.auto_reply_enabled = 'auto_reply_enabled' in request.form
-        shop.auto_exchange_enabled = 'auto_exchange_enabled' in request.form
-        shop.uzuzu_account = request.form.get('uzuzu_account', '').strip()
-
-        new_uzuzu_pwd = request.form.get('uzuzu_password', '').strip()
-        if new_uzuzu_pwd:
-            shop.uzuzu_password = new_uzuzu_pwd
-
         shop.custom_prompt = request.form.get('custom_prompt', '').strip()
         shop.note = request.form.get('note', '').strip()
         shop.updated_at = get_beijing_time()
+
+        # 确保shop_token已生成（旧店铺可能没有token）
+        if not shop.shop_token:
+            shop.generate_token()
 
         db.session.commit()
         flash('店铺配置已保存', 'success')

@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}插件任务记录{% endblock %}
+{% block page_title %}插件任务记录{% endblock %}
+{% block page_subtitle %}查看客户端插件的任务执行历史{% endblock %}
+
+{% block content %}
+<!-- 筛选栏 -->
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-center">
+            <!-- 状态筛选 -->
+            <div class="col-auto">
+                <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">全部状态</option>
+                    {% for s in status_options %}
+                    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>
+                        {{ {'pending':'待执行','claimed':'执行中','done':'已完成','failed':'失败'}.get(s, s) }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <!-- 动作码筛选 -->
+            <div class="col-auto">
+                <input type="text" name="action_code" class="form-control form-control-sm"
+                       placeholder="动作码" value="{{ action_filter }}">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-outline-primary">筛选</button>
+                <a href="{{ url_for('plugin.tasks') }}" class="btn btn-sm btn-outline-secondary">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 任务记录表格 -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        {% if task_list.items %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>任务ID</th>
+                        <th>动作码</th>
+                        <th>插件ID</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>完成时间</th>
+                        <th>结果</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in task_list.items %}
+                    <!-- 任务记录行 -->
+                    <tr>
+                        <td><code class="small">{{ task.task_id[:8] }}...</code></td>
+                        <td><span class="badge bg-primary">{{ task.action_code }}</span></td>
+                        <td><small>{{ task.plugin_id }}</small></td>
+                        <td>
+                            {% if task.status == 'pending' %}
+                            <span class="badge bg-warning text-dark">待执行</span>
+                            {% elif task.status == 'claimed' %}
+                            <span class="badge bg-info">执行中</span>
+                            {% elif task.status == 'done' %}
+                            <span class="badge bg-success">已完成</span>
+                            {% elif task.status == 'failed' %}
+                            <span class="badge bg-danger">失败</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ task.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td><small class="text-muted">{{ task.created_at.strftime('%m-%d %H:%M') if task.created_at else '-' }}</small></td>
+                        <td><small class="text-muted">{{ task.done_at.strftime('%m-%d %H:%M') if task.done_at else '-' }}</small></td>
+                        <td>
+                            {% set result = task.get_result() %}
+                            {% if result %}
+                            <small class="text-{{ 'success' if result.get('success') else 'danger' }}">
+                                {{ result.get('message', result.get('error', ''))[:30] }}
+                            </small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <!-- 分页 -->
+        {% if task_list.pages > 1 %}
+        <div class="card-footer bg-white">
+            <nav>
+                <ul class="pagination pagination-sm mb-0 justify-content-center">
+                    {% if task_list.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ task_list.prev_num }}&status={{ status_filter }}&action_code={{ action_filter }}">上一页</a>
+                    </li>
+                    {% endif %}
+                    <li class="page-item disabled">
+                        <span class="page-link">{{ task_list.page }}/{{ task_list.pages }}</span>
+                    </li>
+                    {% if task_list.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ task_list.next_num }}&status={{ status_filter }}&action_code={{ action_filter }}">下一页</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+        {% else %}
+        <!-- 无任务记录 -->
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-list-task fs-1 opacity-25"></i>
+            <p class="mt-2">暂无任务记录</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

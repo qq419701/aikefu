@@ -67,9 +67,9 @@ def create_app():
     from routes.stats import stats_bp
     from routes.api import api_bp
     from routes.learning import learning_bp
-    from routes.refund import refund_bp
     from routes.risk import risk_bp
     from routes.pdd_orders import pdd_orders_bp
+    from routes.plugin import plugin_bp, plugin_api_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -82,9 +82,12 @@ def create_app():
     app.register_blueprint(stats_bp, url_prefix='/stats')
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(learning_bp, url_prefix='/learning')
-    app.register_blueprint(refund_bp, url_prefix='/refund')
     app.register_blueprint(risk_bp, url_prefix='/risk')
     app.register_blueprint(pdd_orders_bp, url_prefix='/pdd-orders')
+    # 插件客户端API：路径为 /api/plugin/register、/api/plugin/tasks 等
+    app.register_blueprint(plugin_api_bp, url_prefix='/api/plugin')
+    # 插件管理后台页面：路径为 /plugins/、/plugins/tasks
+    app.register_blueprint(plugin_bp, url_prefix='/plugins')
 
     # ---- 启动定时任务调度器 ----
     from modules.scheduler import TaskScheduler

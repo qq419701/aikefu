@@ -61,6 +61,9 @@ class PddOrder(db.Model):
     # 数据抓取时间（北京时间）
     captured_at = db.Column(db.DateTime, default=get_beijing_time)
 
+    # 数据来源：client=客户端采集, browser_plugin=浏览器插件, manual=手动录入
+    source = db.Column(db.String(20), default='browser_plugin')
+
     # 原始数据JSON（备用，存储插件推送的完整数据）
     raw_data = db.Column(db.Text)
 
@@ -85,6 +88,12 @@ class PddOrder(db.Model):
 
     def to_dict(self) -> dict:
         """转换为字典格式，用于API响应和模板渲染"""
+        # source中文映射
+        source_labels = {
+            'client': '客户端采集',
+            'browser_plugin': '浏览器插件',
+            'manual': '手动录入',
+        }
         return {
             'id': self.id,
             'shop_id': self.shop_id,
@@ -99,6 +108,8 @@ class PddOrder(db.Model):
             'refund_status': self.refund_status,
             'refund_reason': self.refund_reason,
             'address': self.address,
+            'source': self.source or 'browser_plugin',
+            'source_label': source_labels.get(self.source or 'browser_plugin', '未知'),
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
             'captured_at': self.captured_at.strftime('%Y-%m-%d %H:%M') if self.captured_at else '',
         }

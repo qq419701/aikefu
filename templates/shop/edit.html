@@ -1,12 +1,14 @@
 {% extends "base.html" %}
 {% block title %}编辑店铺{% endblock %}
 {% block page_title %}编辑店铺：{{ shop.name }}{% endblock %}
-{% block page_subtitle %}修改店铺配置和API设置{% endblock %}
+{% block page_subtitle %}修改店铺配置和功能设置{% endblock %}
 
 {% block content %}
+<!-- 店铺编辑表单 -->
 <div class="card border-0 shadow-sm" style="max-width: 750px;">
     <div class="card-body p-4">
         <form method="POST">
+            <!-- 基本信息区块 -->
             <div class="row g-3">
                 <div class="col-md-8">
                     <label class="form-label fw-semibold">店铺名称</label>
@@ -14,6 +16,7 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">所属行业</label>
+                    <!-- 行业不可修改（行业变更需重建店铺） -->
                     <input type="text" class="form-control bg-light"
                            value="{{ shop.industry.icon + ' ' + shop.industry.name if shop.industry else '未知' }}" readonly>
                 </div>
@@ -29,51 +32,54 @@
                     <label class="form-label fw-semibold">平台店铺ID</label>
                     <input type="text" class="form-control" name="platform_shop_id" value="{{ shop.platform_shop_id }}">
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Client ID（AppKey）</label>
-                    <input type="text" class="form-control" name="client_id" value="{{ shop.client_id }}">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Client Secret（留空不修改）</label>
-                    <input type="password" class="form-control" name="client_secret" placeholder="不修改请留空">
-                </div>
-                
-                <!-- 功能开关 -->
+
+                <!-- 功能开关区块 -->
                 <div class="col-12">
-                    <div class="d-flex gap-4">
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" name="auto_reply_enabled"
-                                   id="auto_reply" {% if shop.auto_reply_enabled %}checked{% endif %}>
-                            <label class="form-check-label" for="auto_reply">自动回复</label>
-                        </div>
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" name="auto_exchange_enabled"
-                                   id="auto_exchange" {% if shop.auto_exchange_enabled %}checked{% endif %}>
-                            <label class="form-check-label" for="auto_exchange">自动换号</label>
-                        </div>
+                    <label class="form-label fw-semibold d-block mb-2">功能开关</label>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="auto_reply_enabled"
+                               id="auto_reply" {% if shop.auto_reply_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="auto_reply">AI自动回复</label>
                     </div>
                 </div>
-                
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">u号租账号</label>
-                    <input type="text" class="form-control" name="uzuzu_account" value="{{ shop.uzuzu_account }}">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">u号租密码（留空不修改）</label>
-                    <input type="password" class="form-control" name="uzuzu_password" placeholder="不修改请留空">
-                </div>
-                
+
+                <!-- 自定义AI提示词区块 -->
                 <div class="col-12">
                     <label class="form-label fw-semibold">自定义AI提示词（覆盖行业默认）</label>
                     <textarea class="form-control" name="custom_prompt" rows="4"
                               placeholder="留空则使用行业默认提示词">{{ shop.custom_prompt }}</textarea>
                 </div>
+
+                <!-- 备注区块 -->
                 <div class="col-12">
                     <label class="form-label fw-semibold">备注</label>
                     <input type="text" class="form-control" name="note" value="{{ shop.note }}">
                 </div>
             </div>
-            
+
+            <!-- 客户端Token只读显示区块 -->
+            {% if shop.shop_token %}
+            <div class="mt-4">
+                <h6 class="fw-bold text-primary mb-3">
+                    <i class="bi bi-key"></i> 客户端Token（供插件鉴权使用）
+                </h6>
+                <div class="alert alert-light border mb-0">
+                    <div class="d-flex align-items-center gap-2">
+                        <code class="flex-grow-1 text-break" id="shop-token-val">{{ shop.shop_token }}</code>
+                        <!-- 复制Token按钮 -->
+                        <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0"
+                                onclick="copyToken()">
+                            <i class="bi bi-clipboard"></i> 复制
+                        </button>
+                    </div>
+                    <div class="form-text mt-1">
+                        客户端（dskehuduan）注册插件时，在请求头中携带
+                        <code>X-Shop-Token: &lt;token&gt;</code>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="d-flex gap-2 mt-4">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-check-circle"></i> 保存修改
@@ -83,4 +89,34 @@
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* 复制shop_token到剪贴板 */
+function copyToken() {
+    var val = document.getElementById('shop-token-val').textContent;
+    var btn = event.currentTarget;
+    navigator.clipboard.writeText(val).then(function() {
+        // 显示复制成功提示（临时改变按钮文字）
+        var original = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check-circle text-success"></i> 已复制';
+        btn.disabled = true;
+        setTimeout(function() {
+            btn.innerHTML = original;
+            btn.disabled = false;
+        }, 2000);
+    }).catch(function() {
+        // 降级：使用老方法
+        var el = document.createElement('textarea');
+        el.value = val;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+        btn.innerHTML = '<i class="bi bi-check-circle text-success"></i> 已复制';
+        setTimeout(function() { location.reload(); }, 1500);
+    });
+}
+</script>
 {% endblock %}

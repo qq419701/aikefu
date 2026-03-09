@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}插件管理{% endblock %}
+{% block page_title %}插件管理{% endblock %}
+{% block page_subtitle %}管理客户端自动化插件，查看在线状态和任务统计{% endblock %}
+
+{% block content %}
+<!-- 插件统计卡片 -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card border-0">
+            <div class="card-body text-center">
+                <div class="fs-2 fw-bold text-primary">{{ stats.total }}</div>
+                <div class="text-muted small">已注册插件</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card border-0">
+            <div class="card-body text-center">
+                <div class="fs-2 fw-bold text-success">{{ stats.online }}</div>
+                <div class="text-muted small">在线插件</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card border-0">
+            <div class="card-body text-center">
+                <div class="fs-2 fw-bold text-warning">{{ stats.pending_tasks }}</div>
+                <div class="text-muted small">待执行任务</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card border-0">
+            <div class="card-body text-center">
+                <div class="fs-2 fw-bold text-info">{{ stats.done_today }}</div>
+                <div class="text-muted small">今日完成任务</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 插件列表 -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h6 class="mb-0 fw-semibold">🔌 已注册插件列表</h6>
+        <!-- 查看任务记录链接 -->
+        <a href="{{ url_for('plugin.tasks') }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-list-task"></i> 查看任务记录
+        </a>
+    </div>
+    <div class="card-body p-0">
+        {% if plugins %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>插件名称</th>
+                        <th>插件ID</th>
+                        <th>所属店铺</th>
+                        <th>支持动作</th>
+                        <th>版本</th>
+                        <th>状态</th>
+                        <th>最后心跳</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for plugin in plugins %}
+                    <!-- 插件行：绿色=在线，灰色=离线 -->
+                    <tr class="{% if not plugin.is_active %}opacity-50{% endif %}">
+                        <td>
+                            <i class="bi bi-puzzle text-primary"></i>
+                            {{ plugin.name or plugin.plugin_id }}
+                            {% if plugin.description %}
+                            <div class="small text-muted">{{ plugin.description[:40] }}</div>
+                            {% endif %}
+                        </td>
+                        <td><code>{{ plugin.plugin_id }}</code></td>
+                        <td>{{ plugin.shop.name if plugin.shop else '-' }}</td>
+                        <td>
+                            <!-- 动作码标签 -->
+                            {% for code in plugin.get_action_codes() %}
+                            <span class="badge bg-secondary me-1">{{ code }}</span>
+                            {% endfor %}
+                        </td>
+                        <td><small>{{ plugin.client_version or '-' }}</small></td>
+                        <td>
+                            {% if plugin.is_online() %}
+                            <span class="badge bg-success">🟢 在线</span>
+                            {% else %}
+                            <span class="badge bg-secondary">⚫ 离线</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small class="text-muted">
+                                {{ plugin.last_heartbeat.strftime('%m-%d %H:%M') if plugin.last_heartbeat else '从未' }}
+                            </small>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <!-- 无插件时显示接入说明 -->
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-puzzle fs-1 opacity-25"></i>
+            <p class="mt-2">暂无已注册的客户端插件</p>
+            <p class="small">启动客户端（dskehuduan）后，插件会自动注册到此处</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 接入说明 -->
+<div class="card border-0 shadow-sm mt-4">
+    <div class="card-header bg-white">
+        <h6 class="mb-0 fw-semibold">📖 客户端插件接入说明</h6>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <h6 class="text-primary">注册插件</h6>
+                <pre class="bg-light p-3 rounded small"><code>POST /api/plugin/register
+Header: X-Shop-Token: &lt;shop_token&gt;
+Body: {
+  "plugin_id": "auto_exchange",
+  "name": "自动换号",
+  "action_codes": ["exchange"],
+  "client_version": "1.0.0"
+}</code></pre>
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-primary">轮询任务</h6>
+                <pre class="bg-light p-3 rounded small"><code>GET /api/plugin/tasks?plugin_id=auto_exchange
+Header: X-Shop-Token: &lt;shop_token&gt;
+
+POST /api/plugin/tasks/&lt;id&gt;/done
+Body: {"result": {"success": true}}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
