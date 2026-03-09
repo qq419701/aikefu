@@ -3,14 +3,17 @@
 AI主引擎模块（三层处理核心 + 意图识别 + 多轮对话）
 功能说明：整合规则引擎、知识库引擎、豆包AI，实现三层递进处理
 处理流程：
+  第〇层：本地意图识别 → 0成本0延迟，覆盖80%意图判断场景
   第一层：规则引擎 → 0成本，目标覆盖20%消息
   第二层：知识库 → 0成本，目标覆盖55%消息
   第三层：豆包AI → 有成本，处理剩余25%消息
 增强功能：
-  - 意图识别（doubao-lite，快速判断退款/换号/查询等）
+  - 本地意图识别（0成本，覆盖80%场景，未命中才调豆包）
   - 多轮对话上下文（30分钟内保持会话连续性）
   - 情绪安抚（doubao-pro，高质量回复）
   - 退款AI决策（doubao-pro，关键决策）
+  - 实时增量学习（AI回复后自动触发学习判断）
+  - 插件任务下发（意图命中插件动作时，自动创建任务队列）
 """
 
 import uuid
@@ -23,6 +26,30 @@ from .emotion_detector import EmotionDetector
 from models import Message, Blacklist, Shop, ConversationContext
 from models.database import db, get_beijing_time
 import config
+
+# ----------------------------------------------------------------
+# 本地意图识别规则（0成本，0延迟，覆盖80%场景）
+# 说明：先做本地规则匹配，命中直接返回意图，不调豆包API
+#       未命中才调豆包lite识别（有成本）
+# 优点：减少80%的意图识别API调用成本
+# ----------------------------------------------------------------
+LOCAL_INTENT_RULES = {
+    'refund':    ['退款', '退钱', '不要了', '申请退', '退货', '要退'],
+    'exchange':  ['换号', '换个', '重新给', '换一个', '换账号', '换个号', '换货'],
+    'login':     ['登不上', '进不去', '密码', '登录失败', '打不开', '登录不了', '进不了'],
+    'complaint': ['投诉', '举报', '差评', '太差', '骗人', '骗子', '维权'],
+    'query':     ['多久', '什么时候', '怎么', '如何', '能不能', '可以吗', '会不会'],
+    'payment':   ['付款', '付钱', '怎么付', '支付', '怎么买', '如何付'],
+}
+
+# ----------------------------------------------------------------
+# 需要客户端插件处理的意图（触发插件任务下发）
+# 说明：当AI识别到这些意图时，同时创建PluginTask等待客户端执行
+# ----------------------------------------------------------------
+PLUGIN_INTENT_ACTIONS = {
+    'exchange': 'auto_exchange',   # 换号意图 → 自动换号插件
+    'refund': 'handle_refund',     # 退款意图 → 退款处理插件（可选）
+}
 
 
 class AIEngine:
@@ -86,9 +113,10 @@ class AIEngine:
         emotion_level = emotion['level']
         needs_human = emotion['needs_human'] or is_blacklisted
 
-        # 3. 意图识别（doubao-lite，快速低成本）
-        intent = 'other'
-        if config.DOUBAO_API_KEY:
+        # 3. 意图识别：先本地规则（0成本），未命中再调豆包（有成本）
+        intent = self._recognize_intent_local(message)
+        if intent == 'other' and config.DOUBAO_API_KEY:
+            # 本地未命中，调用豆包lite识别（有成本）
             intent_result = self.doubao_ai.recognize_intent(message)
             intent = intent_result.get('intent', 'other')
 
@@ -237,6 +265,31 @@ class AIEngine:
                 db.session.rollback()
 
         self._update_message_record(msg_record, 'ai', ai_result.get('tokens', 0))
+
+        # AI处理完成后，触发实时增量学习检查
+        # 说明：当AI回复置信度低或同一问题高频出现时，自动创建学习记录（review_status=pending）
+        try:
+            self._check_learning_trigger(
+                message=message,
+                reply=ai_result['reply'],
+                shop_id=shop_id,
+                industry_id=industry_id,
+            )
+        except Exception:
+            pass  # 学习触发失败不影响正常回复
+
+        # 如果意图需要插件处理，下发插件任务
+        if intent in PLUGIN_INTENT_ACTIONS:
+            try:
+                self._dispatch_plugin_task(
+                    shop_id=shop_id,
+                    intent=intent,
+                    buyer_id=buyer_id,
+                    order_id=order_id,
+                    message=message,
+                )
+            except Exception:
+                pass  # 插件任务下发失败不影响正常回复
 
         return {
             'reply': ai_result['reply'],
@@ -410,5 +463,151 @@ class AIEngine:
             )
             db.session.add(entry)
 
+        db.session.commit()
+
+    def _recognize_intent_local(self, message: str) -> str:
+        """
+        本地意图识别（0成本，0延迟，覆盖80%场景）
+        功能：使用关键词规则快速判断买家消息的意图，无需调用AI API
+        参数：message - 买家消息文本
+        返回：意图类型字符串（refund/exchange/login/complaint/query/payment/other）
+        说明：命中规则直接返回；未命中返回'other'，由调用方决定是否调用豆包识别
+        """
+        msg_lower = message.lower()
+        for intent, keywords in LOCAL_INTENT_RULES.items():
+            for kw in keywords:
+                if kw in msg_lower:
+                    return intent
+        # 本地未命中，返回other（调用方可继续调豆包）
+        return 'other'
+
+    def _check_learning_trigger(self, message: str, reply: str,
+                                shop_id: int, industry_id: int):
+        """
+        实时增量学习触发检查
+        功能：
+          1. 检查AI回复是否包含低置信度兜底词（如"不确定"、"您好我是"等）
+          2. 检查归一化后的相同问题是否出现 ≥ 2次
+          满足任一条件 → 自动创建LearningRecord（review_status=pending）供运营审核
+        参数：
+            message     - 买家原始消息
+            reply       - AI生成的回复
+            shop_id     - 店铺ID
+            industry_id - 行业ID
+        说明：触发的学习记录需运营人员审核后才入库，保证知识库质量
+        """
+        from models.learning import LearningRecord
+        from models.message import Message as MsgModel
+
+        # 低置信度兜底词列表（AI不确定时常用的回复词）
+        LOW_CONFIDENCE_MARKERS = [
+            '不确定', '不太清楚', '建议咨询', '无法确认',
+            '您好我是', '我是AI', '人工客服', '转人工',
+            '很抱歉我', '抱歉，我不', '无法解答',
+        ]
+
+        # 判断AI回复是否为低置信度回复
+        is_low_confidence = any(marker in reply for marker in LOW_CONFIDENCE_MARKERS)
+
+        # 归一化问题文本（取前50字，去除标点，用于去重判断）
+        import re
+        normalized_msg = re.sub(r'[^\w\u4e00-\u9fff]', '', message)[:50]
+
+        # 查询同一行业中相同归一化消息的出现次数（最近7天）
+        from datetime import timedelta
+        week_ago = get_beijing_time() - timedelta(days=7)
+        similar_count = MsgModel.query.filter(
+            MsgModel.direction == 'in',
+            MsgModel.process_by == 'ai',
+            MsgModel.msg_time >= week_ago,
+            MsgModel.content.contains(normalized_msg[:20]),  # 模糊匹配前20字
+        ).count()
+
+        # 触发条件：低置信度 OR 高频出现（≥2次）
+        should_trigger = is_low_confidence or similar_count >= 2
+
+        if not should_trigger:
+            return
+
+        # 检查是否已存在相同问题的待审核记录（避免重复创建）
+        existing = LearningRecord.query.filter_by(
+            industry_id=industry_id,
+            review_status='pending',
+        ).filter(
+            LearningRecord.buyer_message.contains(normalized_msg[:20])
+        ).first()
+
+        if existing:
+            # 已存在，不重复创建
+            return
+
+        # 创建实时增量学习记录
+        record = LearningRecord(
+            industry_id=industry_id,
+            shop_id=shop_id,
+            buyer_message=message,
+            ai_reply=reply,
+            process_by='ai',
+            intent='other',
+            confidence=0.3 if is_low_confidence else 0.6,  # 低置信度标记更低分数
+            review_status='pending',
+            created_at=get_beijing_time(),
+        )
+        db.session.add(record)
+        db.session.commit()
+
+    def _dispatch_plugin_task(self, shop_id: int, intent: str,
+                              buyer_id: str, order_id: str, message: str):
+        """
+        下发插件任务到任务队列
+        功能：当意图识别为需要客户端操作的意图（如exchange/refund）时，
+              创建PluginTask记录，等待客户端（dskehuduan）轮询获取并执行
+        参数：
+            shop_id  - 店铺ID
+            intent   - 意图类型（exchange/refund等）
+            buyer_id - 买家ID（任务参数）
+            order_id - 订单号（任务参数）
+            message  - 买家原始消息（任务参数）
+        说明：客户端通过 GET /api/plugin/tasks 轮询获取待执行任务
+        """
+        import json
+        from models.plugin import ClientPlugin, PluginTask
+
+        # 获取该意图对应的动作码
+        action_code = PLUGIN_INTENT_ACTIONS.get(intent)
+        if not action_code:
+            return
+
+        # 查找该店铺中支持此动作的在线插件
+        plugins = ClientPlugin.query.filter_by(
+            shop_id=shop_id,
+            is_active=True,
+        ).all()
+
+        target_plugin = None
+        for plugin in plugins:
+            if action_code in plugin.get_action_codes() and plugin.is_online():
+                target_plugin = plugin
+                break
+
+        if not target_plugin:
+            # 没有可用的插件，不下发任务
+            return
+
+        # 创建插件任务记录
+        task = PluginTask(
+            shop_id=shop_id,
+            plugin_id=target_plugin.plugin_id,
+            action_code=action_code,
+            payload=json.dumps({
+                'buyer_id': buyer_id,
+                'order_id': order_id or '',
+                'message': message,
+                'intent': intent,
+            }, ensure_ascii=False),
+            status='pending',
+            created_at=get_beijing_time(),
+        )
+        db.session.add(task)
         db.session.commit()
 

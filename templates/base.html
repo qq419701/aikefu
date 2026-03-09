@@ -141,11 +141,11 @@
                 </a>
             </li>
 
+            <!-- 插件管理 -->
             <li class="nav-item">
-                <a class="nav-link {% if request.blueprint == 'refund' %}active{% endif %}"
-                   href="{{ url_for('refund.index') }}">
-                    <i class="bi bi-cash-stack"></i>💰 退款管理
-                    <span id="refund-badge" class="badge bg-danger ms-auto" style="display:none"></span>
+                <a class="nav-link {% if request.blueprint == 'plugin' %}active{% endif %}"
+                   href="{{ url_for('plugin.index') }}">
+                    <i class="bi bi-puzzle"></i>🔌 插件管理
                 </a>
             </li>
 
@@ -349,23 +349,12 @@ function updatePendingBadge() {
 setInterval(updatePendingBadge, 30000);
 updatePendingBadge();
 
-// 定时获取风险数据（退款紧急提醒、学习中心待审核数）
+// 定时获取风险数据（黑名单等级提醒）
 function updateRiskBadges() {
     fetch('/risk/api/summary')
         .then(r => r.json())
         .then(data => {
-            var refundBadge = document.getElementById('refund-badge');
-            if (refundBadge) {
-                if (data.urgent_refunds > 0) {
-                    refundBadge.textContent = '紧急 ' + data.urgent_refunds;
-                    refundBadge.style.display = '';
-                } else if (data.pending_refunds > 0) {
-                    refundBadge.textContent = data.pending_refunds;
-                    refundBadge.style.display = '';
-                } else {
-                    refundBadge.style.display = 'none';
-                }
-            }
+            // V2已删除退款管理，仅保留黑名单统计
         })
         .catch(function(){});
 }

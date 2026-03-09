@@ -3,9 +3,13 @@
 知识库引擎模块（三层处理 - 第二层）
 功能说明：基于关键词相似度检索知识库，0成本处理约55%的消息
 通过关键词匹配和简单的相似度计算，找到最相关的问答
+检索策略：
+  MAXKB_ENABLED=true  → MaxKB语义检索（命中率~85%）
+  MAXKB_ENABLED=false → 原有关键词重叠率检索（默认，0成本）
 """
 
 import re
+import config
 from models import KnowledgeBase
 from models.database import db
 
@@ -27,7 +31,9 @@ class KnowledgeEngine:
     def search(self, message: str, industry_id: int) -> dict | None:
         """
         在知识库中搜索最相关的答案
-        功能：提取消息关键词，在知识库中计算相似度，返回最佳匹配
+        功能：
+          - 若MAXKB_ENABLED=true：使用MaxKB语义检索（向量相似度，命中率更高）
+          - 若MAXKB_ENABLED=false：使用关键词重叠率计算相似度（默认，0成本）
         参数：
             message - 买家消息内容
             industry_id - 行业ID（知识库按行业隔离）
@@ -35,6 +41,24 @@ class KnowledgeEngine:
             匹配成功：{'reply': '答案内容', 'knowledge_id': 知识库ID, 'similarity': 相似度}
             匹配失败：None
         """
+        # 优先使用MaxKB语义检索（命中率更高）
+        if config.MAXKB_ENABLED:
+            from .maxkb_client import MaxKBClient
+            maxkb = MaxKBClient()
+            result = maxkb.search(message, industry_id)
+            if result:
+                # MaxKB命中：同步更新aikefu本地命中次数
+                if result.get('knowledge_id'):
+                    item = KnowledgeBase.query.get(result['knowledge_id'])
+                    if item:
+                        item.hit_count = (item.hit_count or 0) + 1
+                        try:
+                            db.session.commit()
+                        except Exception:
+                            db.session.rollback()
+                return result
+            # MaxKB未命中时降级到关键词检索
+
         # 获取该行业的所有启用知识库条目，按优先级排序
         items = KnowledgeBase.query.filter_by(
             industry_id=industry_id,

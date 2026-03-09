@@ -54,21 +54,11 @@ class TaskScheduler:
         """
         注册所有定时任务
         功能：将各个定时任务添加到调度器
+        注意：每日AI学习已改为实时触发（ai_engine.py中的_check_learning_trigger）
+             不再注册 daily_ai_learning 定时任务
         """
-        # 任务1：每日AI自动学习（北京时间凌晨3:00）
-        self.scheduler.add_job(
-            func=self._daily_ai_learning,
-            trigger=CronTrigger(
-                hour=config.DAILY_LEARNING_HOUR,
-                minute=config.DAILY_LEARNING_MINUTE,
-                timezone=BEIJING_TZ,
-            ),
-            id='daily_ai_learning',
-            name='每日AI自动学习',
-            replace_existing=True,
-        )
-
-        # 任务2：每日数据统计（北京时间凌晨1:00）
+        # 任务1：每日数据统计（北京时间凌晨1:00）
+        # 同时统计当日高频AI回复消息，批量创建学习记录
         self.scheduler.add_job(
             func=self._daily_statistics,
             trigger=CronTrigger(
@@ -81,7 +71,7 @@ class TaskScheduler:
             replace_existing=True,
         )
 
-        # 任务3：每小时清理过期缓存（每小时整点）
+        # 任务2：每小时清理过期缓存（每小时整点）
         self.scheduler.add_job(
             func=self._clean_expired_cache,
             trigger=CronTrigger(
@@ -93,7 +83,7 @@ class TaskScheduler:
             replace_existing=True,
         )
 
-        # 任务4：每天检查黑名单（北京时间上午9:00）
+        # 任务3：每天检查黑名单（北京时间上午9:00）
         self.scheduler.add_job(
             func=self._check_blacklist_auto,
             trigger=CronTrigger(
@@ -106,63 +96,20 @@ class TaskScheduler:
             replace_existing=True,
         )
 
-        logger.info("[定时任务] 所有任务已注册完成")
-
-    def _daily_ai_learning(self):
-        """
-        每日AI自动学习任务
-        功能：
-            1. 统计昨日未解决/人工处理的消息
-            2. 提取高频问题，自动添加到知识库
-            3. 优化规则匹配关键词
-        执行时间：北京时间每天凌晨3:00
-        """
-        with self.app.app_context():
-            try:
-                from models import Message, KnowledgeBase, Industry
-                from models.database import db, get_beijing_time
-                from datetime import timedelta
-
-                logger.info("[AI学习] 开始执行每日自动学习...")
-                now = get_beijing_time()
-                yesterday = now - timedelta(days=1)
-                yesterday_str = yesterday.strftime('%Y-%m-%d')
-
-                # 查找昨日被AI处理的消息（这些是知识库没覆盖的）
-                ai_messages = Message.query.filter(
-                    Message.direction == 'in',
-                    Message.process_by == 'ai',
-                    Message.msg_time >= yesterday.replace(hour=0, minute=0, second=0),
-                    Message.msg_time < now.replace(hour=0, minute=0, second=0),
-                ).all()
-
-                # 统计高频消息（出现3次以上的问题）
-                msg_counts = {}
-                for msg in ai_messages:
-                    key = msg.content[:50]  # 取前50字作为key
-                    msg_counts[key] = msg_counts.get(key, 0) + 1
-
-                # 将高频问题标记为待学习
-                learned = 0
-                for content, count in msg_counts.items():
-                    if count >= 3:
-                        logger.info(f"[AI学习] 高频问题({count}次): {content}")
-                        learned += 1
-
-                logger.info(f"[AI学习] 完成，发现 {learned} 个高频问题待手动入库")
-
-            except Exception as e:
-                logger.error(f"[AI学习] 执行出错: {e}")
+        logger.info("[定时任务] 所有任务已注册完成（AI学习已改为实时触发）")
 
     def _daily_statistics(self):
         """
         每日数据统计任务
-        功能：统计前一天的运营数据，生成DailyStats记录
+        功能：
+          1. 统计前一天的运营数据，生成DailyStats记录
+          2. 统计当日高频AI回复消息，批量创建学习记录（补充实时触发的遗漏）
         执行时间：北京时间每天凌晨1:00
         """
         with self.app.app_context():
             try:
                 from models import Message, DailyStats, Shop
+                from models.learning import LearningRecord
                 from models.database import db, get_beijing_time
                 from datetime import timedelta
 
@@ -201,6 +148,37 @@ class TaskScheduler:
                         created_at=get_beijing_time(),
                     )
                     db.session.add(stats)
+
+                    # 统计昨日高频AI回复消息，批量创建学习记录（补充实时触发的遗漏）
+                    ai_msgs = [m for m in msgs if m.process_by == 'ai']
+                    msg_counts = {}
+                    for m in ai_msgs:
+                        key = m.content[:50]  # 取前50字作为去重键
+                        msg_counts[key] = msg_counts.get(key, []) + [m]
+
+                    for content_key, msg_list in msg_counts.items():
+                        if len(msg_list) >= 2:
+                            # 高频问题（≥2次），检查是否已有待审核记录
+                            first_msg = msg_list[0]
+                            existing = LearningRecord.query.filter_by(
+                                industry_id=shop.industry_id,
+                                review_status='pending',
+                            ).filter(
+                                LearningRecord.buyer_message.contains(content_key[:20])
+                            ).first()
+                            if not existing:
+                                # 创建学习记录（待运营人员审核）
+                                record = LearningRecord(
+                                    industry_id=shop.industry_id,
+                                    shop_id=shop.id,
+                                    buyer_message=first_msg.content,
+                                    ai_reply='（待填写：请根据业务情况填写正确答案）',
+                                    process_by='ai',
+                                    confidence=0.5,
+                                    review_status='pending',
+                                    created_at=get_beijing_time(),
+                                )
+                                db.session.add(record)
 
                 db.session.commit()
                 logger.info(f"[统计] 完成，统计日期：{stat_date}，店铺数：{len(shops)}")

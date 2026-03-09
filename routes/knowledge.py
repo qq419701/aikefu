@@ -9,6 +9,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from models import KnowledgeBase, Industry
 from models.database import db, get_beijing_time
+import config
 
 # 创建知识库蓝图
 knowledge_bp = Blueprint('knowledge', __name__)
@@ -105,6 +106,11 @@ def add():
         db.session.add(item)
         db.session.commit()
 
+        # 如果MaxKB已启用，自动同步新条目到MaxKB向量库
+        if config.MAXKB_ENABLED:
+            from modules.maxkb_client import MaxKBClient
+            MaxKBClient().upsert(item.id, question, answer, keywords)
+
         flash('知识库条目添加成功', 'success')
         return redirect(url_for('knowledge.index', industry_id=industry_id))
 
@@ -141,6 +147,12 @@ def edit(item_id):
         item.updated_at = get_beijing_time()
 
         db.session.commit()
+
+        # 如果MaxKB已启用，自动同步更新到MaxKB向量库
+        if config.MAXKB_ENABLED:
+            from modules.maxkb_client import MaxKBClient
+            MaxKBClient().upsert(item.id, item.question, item.answer, item.keywords or '')
+
         flash('知识库条目已更新', 'success')
         return redirect(url_for('knowledge.index', industry_id=item.industry_id))
 
@@ -159,8 +171,14 @@ def delete(item_id):
         return jsonify({'success': False, 'message': '无权限'}), 403
 
     industry_id = item.industry_id
+    item_id_for_maxkb = item.id  # 先保存ID，删除后无法访问
     db.session.delete(item)
     db.session.commit()
+
+    # 如果MaxKB已启用，同步删除MaxKB中的向量文档
+    if config.MAXKB_ENABLED:
+        from modules.maxkb_client import MaxKBClient
+        MaxKBClient().delete(item_id_for_maxkb)
 
     flash('知识库条目已删除', 'success')
     return redirect(url_for('knowledge.index', industry_id=industry_id))

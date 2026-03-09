@@ -4,10 +4,11 @@
 {% block page_subtitle %}在指定行业下添加电商平台店铺{% endblock %}
 
 {% block content %}
+<!-- 店铺添加表单 -->
 <div class="card border-0 shadow-sm" style="max-width: 750px;">
     <div class="card-body p-4">
         <form method="POST">
-            <!-- 基本信息 -->
+            <!-- 基本信息区块 -->
             <h6 class="fw-bold text-primary mb-3"><i class="bi bi-info-circle"></i> 基本信息</h6>
             <div class="row g-3 mb-4">
                 <div class="col-md-8">
@@ -37,58 +38,33 @@
                     <input type="text" class="form-control" name="platform_shop_id" placeholder="拼多多/淘宝店铺ID">
                 </div>
             </div>
-            
-            <!-- 平台API配置 -->
-            <h6 class="fw-bold text-primary mb-3"><i class="bi bi-key"></i> 平台API配置</h6>
-            <div class="alert alert-info py-2 small mb-3">
-                <i class="bi bi-info-circle"></i>
-                拼多多：在商家后台 → 应用管理 → 开放API 获取 AppKey 和 AppSecret
-            </div>
-            <div class="row g-3 mb-4">
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Client ID（AppKey）</label>
-                    <input type="text" class="form-control" name="client_id" placeholder="平台API AppKey">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Client Secret（AppSecret）</label>
-                    <input type="password" class="form-control" name="client_secret" placeholder="平台API AppSecret">
-                </div>
-            </div>
-            
-            <!-- 游戏租号专用（u号租） -->
-            <h6 class="fw-bold text-primary mb-3">
-                <i class="bi bi-controller"></i> 游戏租号专用配置（可选）
-            </h6>
+
+            <!-- 功能设置区块 -->
+            <h6 class="fw-bold text-primary mb-3"><i class="bi bi-gear"></i> 功能设置</h6>
             <div class="row g-3 mb-4">
                 <div class="col-12">
                     <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" name="auto_exchange_enabled"
-                               id="auto_exchange">
-                        <label class="form-check-label fw-semibold" for="auto_exchange">
-                            启用自动换号（u号租平台）
+                        <input class="form-check-input" type="checkbox" name="auto_reply_enabled"
+                               id="auto_reply" checked>
+                        <label class="form-check-label fw-semibold" for="auto_reply">
+                            启用AI自动回复
                         </label>
                     </div>
-                    <div class="form-text">开启后，买家申请换号时自动操作u号租后台完成换货</div>
+                    <div class="form-text">开启后，买家消息将自动触发三层AI处理</div>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">u号租账号</label>
-                    <input type="text" class="form-control" name="uzuzu_account" placeholder="u号租平台账号">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">u号租密码</label>
-                    <input type="password" class="form-control" name="uzuzu_password" placeholder="u号租平台密码">
-                </div>
-            </div>
-            
-            <!-- 其他设置 -->
-            <h6 class="fw-bold text-primary mb-3"><i class="bi bi-gear"></i> 其他设置</h6>
-            <div class="row g-3 mb-4">
                 <div class="col-12">
                     <label class="form-label fw-semibold">店铺备注</label>
                     <input type="text" class="form-control" name="note" placeholder="内部备注（可选）">
                 </div>
             </div>
-            
+
+            <!-- 客户端Token说明区块（添加后自动生成，此处仅说明） -->
+            <div class="alert alert-info py-2 small mb-4">
+                <i class="bi bi-key"></i>
+                <strong>客户端Token（shop_token）</strong>：店铺创建后自动生成，
+                供客户端插件（dskehuduan）注册和鉴权使用。可在店铺编辑页面查看。
+            </div>
+
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-check-circle"></i> 保存店铺

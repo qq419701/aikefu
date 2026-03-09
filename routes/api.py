@@ -488,3 +488,31 @@ def health():
         'ai_configured': bool(config.DOUBAO_API_KEY),
     })
 
+
+
+@api_bp.route('/orders/push', methods=['POST'])
+def orders_push():
+    """
+    客户端推送订单数据接口（V2新增）
+    功能：供客户端（dskehuduan）直接推送订单数据到aikefu
+    鉴权：X-Shop-Token请求头（店铺Token）
+    请求格式（JSON）：
+    {
+        "orders": [
+            {
+                "order_id": "订单号",
+                "buyer_id": "买家ID",
+                "buyer_name": "买家昵称",
+                "goods_name": "商品名",
+                "amount": 9900,
+                "status": "待发货",
+                "created_at": "2026-03-09 10:00:00"
+            }
+        ],
+        "source": "client"
+    }
+    返回：{'success': true, 'created': 新增数量, 'updated': 更新数量}
+    """
+    # 复用pdd_orders路由中的推送逻辑
+    from routes.pdd_orders import push_orders
+    return push_orders()

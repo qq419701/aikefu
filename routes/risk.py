@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-风险管理路由模块（页面7）
-功能说明：管理风险买家、黑名单，监控退款和换号异常，提醒可疑订单
-整合黑名单和退款数据，自动分析风险等级
+风险管理路由模块
+功能说明：管理风险买家、黑名单，监控可疑买家，提醒操作人员
+V2重构：退款管理模块已删除，风险管理只保留黑名单功能
 """
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
-from models import Blacklist, RefundRecord, Industry
+from models import Blacklist, Industry
 from models.database import db, get_beijing_time
 
 # 创建风险管理蓝图
@@ -20,10 +20,9 @@ def index():
     """
     风险管理首页
     功能：
-      - 风险买家列表（自动标记，按风险等级排序）
+      - 风险买家列表（黑名单，按风险等级排序）
       - 黑名单管理入口
-      - 退款/换号异常统计
-      - 可疑订单提醒（高频退款买家）
+      - 各风险等级统计
     """
     industry_id = request.args.get('industry_id', type=int)
     page = request.args.get('page', 1, type=int)
@@ -49,58 +48,24 @@ def index():
         Blacklist.level.desc(), Blacklist.created_at.desc()
     ).paginate(page=page, per_page=20)
 
-    # 退款异常统计（同一买家多次退款）
-    from sqlalchemy import func
-    rf_query = db.session.query(
-        RefundRecord.buyer_id,
-        RefundRecord.buyer_name,
-        RefundRecord.industry_id,
-        func.count(RefundRecord.id).label('refund_count'),
-        func.sum(RefundRecord.refund_amount).label('total_amount'),
-    ).filter(RefundRecord.is_malicious)
-
-    if industry_id:
-        rf_query = rf_query.filter(RefundRecord.industry_id == industry_id)
-    elif not current_user.is_admin():
-        rf_query = rf_query.filter(
-            RefundRecord.industry_id == current_user.industry_id
-        )
-
-    malicious_stats = rf_query.group_by(
-        RefundRecord.buyer_id, RefundRecord.buyer_name, RefundRecord.industry_id
-    ).order_by(func.count(RefundRecord.id).desc()).limit(10).all()
+    # 各风险等级统计
     level_stats = {
         'level1': bl_query.filter(Blacklist.level == 1).count(),
         'level2': bl_query.filter(Blacklist.level == 2).count(),
         'level3': bl_query.filter(Blacklist.level == 3).count(),
     }
 
-    # 本月退款总次数（含恶意）
-    from datetime import timedelta
-    now = get_beijing_time()
-    month_start = now.replace(day=1, hour=0, minute=0, second=0)
-
-    rf_month_query = RefundRecord.query.filter(RefundRecord.applied_at >= month_start)
-    if industry_id:
-        rf_month_query = rf_month_query.filter_by(industry_id=industry_id)
-    elif not current_user.is_admin():
-        rf_month_query = rf_month_query.filter_by(industry_id=current_user.industry_id)
-
-    refund_stats = {
-        'month_total': rf_month_query.count(),
-        'month_malicious': rf_month_query.filter(RefundRecord.is_malicious).count(),
-        'month_rejected': rf_month_query.filter(
-            RefundRecord.status.in_(['rejected', 'ai_rejected'])
-        ).count(),
-    }
-
     return render_template('risk/index.html',
         risk_buyers=risk_buyers,
         industries=industries,
         selected_industry=industry_id,
-        malicious_stats=malicious_stats,
+        malicious_stats=[],         # V2已删除退款管理，此处返回空列表
         level_stats=level_stats,
-        refund_stats=refund_stats,
+        refund_stats={              # V2已删除退款管理，此处返回空统计
+            'month_total': 0,
+            'month_malicious': 0,
+            'month_rejected': 0,
+        },
     )
 
 
@@ -156,6 +121,7 @@ def api_summary():
     风险数据汇总API
     功能：返回当前风险统计数据（用于控制面板实时更新）
     返回：JSON格式的风险统计数据
+    V2说明：退款管理已删除，urgent_refunds和pending_refunds均返回0
     """
     industry_id = request.args.get('industry_id', type=int)
 
@@ -163,13 +129,9 @@ def api_summary():
     if industry_id:
         bl_query = bl_query.filter_by(industry_id=industry_id)
 
-    rf_query = RefundRecord.query.filter_by(status='pending')
-    if industry_id:
-        rf_query = rf_query.filter_by(industry_id=industry_id)
-
     return jsonify({
         'blacklist_count': bl_query.count(),
         'level3_count': bl_query.filter(Blacklist.level == 3).count(),
-        'pending_refunds': rf_query.count(),
-        'urgent_refunds': sum(1 for r in rf_query.all() if r.is_urgent()),
+        'pending_refunds': 0,   # V2已删除退款管理
+        'urgent_refunds': 0,    # V2已删除退款管理
     })
