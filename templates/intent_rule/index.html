@@ -5,7 +5,8 @@
 
 {% block content %}
 <!-- 操作栏 -->
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3"
+     data-toggle-url-tpl="{{ url_for('intent_rule.toggle', rule_id=0) }}">
     <div class="d-flex gap-2 align-items-center">
         <!-- 行业筛选（仅管理员可见） -->
         {% if current_user.is_admin() %}
@@ -184,11 +185,13 @@
 {% block extra_js %}
 <script>
 // 启用/禁用切换（AJAX）
+var toggleUrlTpl = document.querySelector('[data-toggle-url-tpl]').dataset.toggleUrlTpl;
 document.querySelectorAll('.toggle-switch').forEach(function(el) {
     el.addEventListener('change', function() {
         var ruleId = this.dataset.ruleId;
         var row = document.getElementById('rule-row-' + ruleId);
-        fetch('/intent-rules/' + ruleId + '/toggle', {
+        var url = toggleUrlTpl.replace('/0/', '/' + ruleId + '/');
+        fetch(url, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
         })

@@ -256,7 +256,7 @@ def task_done(task_id: int):
         from models.database import db as _db
         rule = IntentRule.query.filter(
             IntentRule.action_code == task.action_code,
-            IntentRule.is_active == True,
+            IntentRule.is_active.is_(True),
         ).order_by(IntentRule.priority.asc()).first()
         if rule and rule.done_reply_tpl:
             # 用任务结果填充话术模板变量（如 {new_account}, {order_id}）

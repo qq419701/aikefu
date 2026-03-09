@@ -77,9 +77,12 @@
                 <!-- 插件动作码 -->
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">插件动作码</label>
+                    <!-- 隐藏字段：最终提交的动作码 -->
+                    <input type="hidden" name="action_code" id="actionCodeFinal"
+                           value="{{ rule.action_code or '' if rule else '' }}">
                     <div class="input-group">
-                        <select class="form-select" name="action_code" id="actionCodeSelect"
-                                onchange="syncActionInput(this)">
+                        <select class="form-select" id="actionCodeSelect"
+                                onchange="updateActionCode(this)">
                             <option value="">— 无动作（纯意图识别）—</option>
                             {% for code in action_codes %}
                             <option value="{{ code }}"
@@ -95,10 +98,10 @@
                     </div>
                     <!-- 手动输入框（选"手动输入"时显示） -->
                     <input type="text" class="form-control mt-1" id="actionCodeCustom"
-                           name="action_code_custom"
                            placeholder="输入自定义动作码，如 auto_exchange"
                            value="{{ rule.action_code if rule and rule.action_code and rule.action_code not in action_codes else '' }}"
-                           style="display:{% if rule and rule.action_code and rule.action_code not in action_codes %}block{% else %}none{% endif %}">
+                           style="display:{% if rule and rule.action_code and rule.action_code not in action_codes %}block{% else %}none{% endif %}"
+                           oninput="document.getElementById('actionCodeFinal').value = this.value">
                     <div class="form-text">选择已注册插件支持的动作；无插件时可手动填写预留动作码</div>
                 </div>
 
@@ -150,32 +153,16 @@
 {% block extra_js %}
 <script>
 // 动作码下拉与手动输入联动
-function syncActionInput(select) {
+function updateActionCode(select) {
     var custom = document.getElementById('actionCodeCustom');
+    var finalInput = document.getElementById('actionCodeFinal');
     if (select.value === '__custom__') {
         custom.style.display = 'block';
-        custom.required = true;
+        finalInput.value = custom.value.trim();
     } else {
         custom.style.display = 'none';
-        custom.required = false;
-        custom.value = '';
+        finalInput.value = select.value;
     }
 }
-
-// 提交时将正确的 action_code 写入隐藏字段
-document.querySelector('form').addEventListener('submit', function(e) {
-    var select = document.getElementById('actionCodeSelect');
-    var custom = document.getElementById('actionCodeCustom');
-    if (select.value === '__custom__') {
-        // 用自定义输入值替换 select 的值
-        var hiddenInput = document.createElement('input');
-        hiddenInput.type = 'hidden';
-        hiddenInput.name = 'action_code';
-        hiddenInput.value = custom.value.trim();
-        this.appendChild(hiddenInput);
-        select.name = '';  // 取消 select 的 name，避免重复提交
-    }
-    // 若 select 值为空（无动作），action_code 提交空字符串，后端处理为 NULL
-});
 </script>
 {% endblock %}

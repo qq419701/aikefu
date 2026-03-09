@@ -485,7 +485,7 @@ class AIEngine:
 
         # 查询所有启用的规则：先行业规则，再全局规则（NULL industry_id），按优先级升序
         rules = IntentRule.query.filter(
-            IntentRule.is_active == True,
+            IntentRule.is_active.is_(True),
             db.or_(
                 IntentRule.industry_id == industry_id,
                 IntentRule.industry_id == None,  # noqa: E711
@@ -516,7 +516,7 @@ class AIEngine:
             rule = IntentRule.query.filter(
                 IntentRule.intent_code == intent_code,
                 IntentRule.action_code == action_code,
-                IntentRule.is_active == True,
+                IntentRule.is_active.is_(True),
                 db.or_(
                     IntentRule.industry_id == industry_id,
                     IntentRule.industry_id == None,  # noqa: E711

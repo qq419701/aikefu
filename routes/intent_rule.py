@@ -109,7 +109,10 @@ def add():
         intent_code = request.form.get('intent_code', '').strip()
         intent_name = request.form.get('intent_name', '').strip()
         keywords_raw = request.form.get('keywords', '').strip()
+        # 动作码：优先取 action_code，若为 '__custom__' 则取 action_code_custom
         action_code = request.form.get('action_code', '').strip()
+        if action_code == '__custom__':
+            action_code = request.form.get('action_code_custom', '').strip()
         auto_reply_tpl = request.form.get('auto_reply_tpl', '').strip()
         done_reply_tpl = request.form.get('done_reply_tpl', '').strip()
         priority = request.form.get('priority', 0, type=int)
@@ -190,7 +193,10 @@ def edit(rule_id: int):
         intent_code = request.form.get('intent_code', '').strip()
         intent_name = request.form.get('intent_name', '').strip()
         keywords_raw = request.form.get('keywords', '').strip()
+        # 动作码：优先取 action_code，若为 '__custom__' 则取 action_code_custom
         action_code = request.form.get('action_code', '').strip()
+        if action_code == '__custom__':
+            action_code = request.form.get('action_code_custom', '').strip()
         auto_reply_tpl = request.form.get('auto_reply_tpl', '').strip()
         done_reply_tpl = request.form.get('done_reply_tpl', '').strip()
         priority = request.form.get('priority', 0, type=int)
