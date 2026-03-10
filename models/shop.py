@@ -107,9 +107,14 @@ class Shop(db.Model):
 
     def is_token_valid(self):
         """
-        检查访问令牌是否有效
-        返回：True=有效，False=已过期或不存在
+        检查令牌是否有效
+        优先判断 shop_token（客户端插件鉴权Token）是否存在
+        其次判断 access_token（平台OAuth令牌）是否未过期
         """
+        # 客户端插件Token存在即视为有效
+        if self.shop_token:
+            return True
+        # 兼容旧逻辑：检查平台OAuth令牌
         if not self.access_token:
             return False
         if not self.token_expires_at:
