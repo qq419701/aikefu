@@ -54,8 +54,8 @@ class AIEngine:
         self.context_store = ContextStore()
 
     def process_message(self, shop_id: int, buyer_id: str, buyer_name: str,
-                        message: str, order_id: str = '', msg_type: str = 'text',
-                        image_url: str = '') -> dict:
+                        message: str, order_id: str = '', order_sn: str = '',
+                        msg_type: str = 'text', image_url: str = '') -> dict:
         """
         处理买家消息（三层处理主入口）
         功能：
@@ -159,6 +159,8 @@ class AIEngine:
                     buyer_id=buyer_id,
                     order_id=order_id,
                     message=message,
+                    buyer_name=buyer_name,
+                    order_sn=order_sn,
                 )
             except Exception:
                 pass
@@ -628,7 +630,8 @@ class AIEngine:
         db.session.commit()
 
     def _dispatch_plugin_task(self, shop_id: int, intent: str, action_code: str,
-                              buyer_id: str, order_id: str, message: str) -> bool:
+                              buyer_id: str, order_id: str, message: str,
+                              buyer_name: str = '', order_sn: str = '') -> bool:
         """
         下发插件任务到任务队列
         功能：当意图识别为需要客户端操作的意图（如exchange/refund）时，
@@ -669,7 +672,9 @@ class AIEngine:
             action_code=action_code,
             payload=json.dumps({
                 'buyer_id': buyer_id,
+                'buyer_name': buyer_name,
                 'order_id': order_id or '',
+                'order_sn': order_sn or order_id,
                 'message': message,
                 'intent': intent,
             }, ensure_ascii=False),

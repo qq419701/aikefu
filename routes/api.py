@@ -67,6 +67,7 @@ def webhook_message():
         buyer_name = data.get('buyer_name', '')
         content = data.get('content', '')
         order_id = data.get('order_id', '')
+        order_sn = data.get('order_sn', '') or order_id
         msg_type = data.get('msg_type', 'text')
         image_url = data.get('image_url', '')
 
@@ -92,6 +93,7 @@ def webhook_message():
             buyer_name=buyer_name,
             message=content,
             order_id=order_id,
+            order_sn=order_sn,
             msg_type=msg_type,
             image_url=image_url,
         )
@@ -241,6 +243,7 @@ def webhook_pdd():
         content = data.get('content', '').strip()
         msg_type = data.get('msg_type', 'text')
         order_id = data.get('order_id', '')
+        order_sn = data.get('order_sn', '') or order_id
         order_info_data = data.get('order_info') or {}
 
         if not shop_token:
@@ -272,6 +275,7 @@ def webhook_pdd():
             buyer_name=buyer_name,
             message=content,
             order_id=order_id,
+            order_sn=order_sn,
             msg_type=msg_type,
         )
 
