@@ -54,8 +54,17 @@
                     <div class="form-text">程序内部使用，只允许英文字母/数字/下划线</div>
                 </div>
 
-                <!-- 意图名称 -->
+                <!-- 意图标识中文说明 -->
                 <div class="col-md-8">
+                    <label class="form-label fw-semibold">意图标识中文说明 <small class="text-muted">（选填）</small></label>
+                    <input type="text" class="form-control" name="intent_code_label"
+                           value="{{ rule.intent_code_label or '' if rule else '' }}"
+                           placeholder="如：换号请求 — 买家要求更换游戏账号">
+                    <div class="form-text">帮助团队理解该意图标识的含义</div>
+                </div>
+
+                <!-- 意图名称 -->
+                <div class="col-md-12">
                     <label class="form-label fw-semibold">意图名称 <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" name="intent_name" required
                            value="{{ rule.intent_name if rule else '' }}"
@@ -106,7 +115,13 @@
                 </div>
 
                 <!-- 空列占位 -->
-                <div class="col-md-6"></div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">插件动作码中文说明 <small class="text-muted">（自动填充或手动修改）</small></label>
+                    <input type="text" class="form-control" name="action_code_label" id="action_code_label"
+                           value="{{ rule.action_code_label or '' if rule else '' }}"
+                           placeholder="选择动作码后自动填充">
+                    <div class="form-text">描述该动作码的用途，方便运营人员理解</div>
+                </div>
 
                 <!-- 立即回复话术 -->
                 <div class="col-12">
@@ -152,17 +167,33 @@
 
 {% block extra_js %}
 <script>
+// 动作码说明字典（由后端 IntentRule.get_action_code_labels() 提供）
+var actionLabels = {{ action_labels | tojson }};
+
 // 动作码下拉与手动输入联动
 function updateActionCode(select) {
     var custom = document.getElementById('actionCodeCustom');
     var finalInput = document.getElementById('actionCodeFinal');
+    var labelInput = document.getElementById('action_code_label');
     if (select.value === '__custom__') {
         custom.style.display = 'block';
         finalInput.value = custom.value.trim();
     } else {
         custom.style.display = 'none';
         finalInput.value = select.value;
+        // 自动填充说明（仅在说明框为空时填充）
+        if (labelInput && !labelInput.value) {
+            labelInput.value = actionLabels[select.value] || '';
+        }
     }
 }
+
+// 手动输入动作码时也尝试自动填充说明
+document.getElementById('actionCodeCustom')?.addEventListener('input', function() {
+    var labelInput = document.getElementById('action_code_label');
+    if (labelInput && !labelInput.value) {
+        labelInput.value = actionLabels[this.value.trim()] || '';
+    }
+});
 </script>
 {% endblock %}
