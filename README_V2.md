@@ -786,3 +786,316 @@ git pull origin main
 - 侧边栏新增🔌插件管理、🎯意图规则菜单
 - `process_message` 返回 `process_by='plugin'` 标识插件处理路径
 - 所有布尔查询改为 SQLAlchemy `.is_(True)` 语法
+
+---
+
+## 16. 客户端接入指南
+
+> 本章节说明桌面客户端（dskehuduan）如何通过账号密码登录、自动同步多店铺 Token、接入插件化体系，实现**一个客户端管理多个店铺**。
+
+---
+
+### 16.1 账号登录流程
+
+```
+客户端启动
+    ↓
+填写服务器地址（如 https://example.com:6000，生产环境请使用 HTTPS）
+    ↓
+填写账号/密码（与爱客服管理后台账号相同）
+    ↓
+POST /api/client/login
+    ↓
+返回 client_token（有效期 7 天，自动续期）
+    ↓
+GET /api/client/shops（带 X-Client-Token 请求头）
+    ↓
+自动获取名下所有激活店铺列表（含 shop_token）
+    ↓
+为每个店铺启动独立的插件任务执行器
+```
+
+**权限说明：**
+
+| 账号类型 | 可见店铺范围 |
+|----------|-------------|
+| 管理员（admin） | 所有激活店铺 |
+| 普通用户（operator） | 与其 industry_id 匹配的激活店铺 |
+
+---
+
+### 16.2 多店铺管理说明
+
+- 客户端登录一次，自动获取名下**全部**激活店铺及其 `shop_token`
+- 每个店铺独立运行一个任务轮询器（`AikefuTaskRunner`），互不干扰
+- Token 有效期 7 天，客户端启动时自动调用 `/api/client/refresh` 续期
+- 无需手动复制粘贴 `shop_token`，完全自动化
+
+---
+
+### 16.3 客户端账号 API 接口文档
+
+#### POST `/api/client/login` — 账号登录
+
+**请求体**
+```json
+{
+  "username": "admin",
+  "password": "admin123"
+}
+```
+
+**成功响应（200）**
+```json
+{
+  "success": true,
+  "client_token": "a3f8c2d1e9b7...",
+  "username": "admin",
+  "display_name": "管理员",
+  "expires_in": 604800
+}
+```
+
+**失败响应（401）**
+```json
+{"success": false, "message": "用户名或密码错误"}
+```
+
+---
+
+#### GET `/api/client/shops` — 获取名下店铺列表
+
+**请求头**
+```
+X-Client-Token: <client_token>
+```
+
+**成功响应（200）**
+```json
+{
+  "success": true,
+  "shops": [
+    {
+      "id": 1,
+      "name": "程洋游戏",
+      "platform": "pdd",
+      "platform_shop_id": "123456",
+      "shop_token": "d3af8c2e...",
+      "is_active": true,
+      "auto_reply_enabled": true
+    },
+    {
+      "id": 2,
+      "name": "店铺二号",
+      "platform": "pdd",
+      "platform_shop_id": "654321",
+      "shop_token": "f9c1b7a3...",
+      "is_active": true,
+      "auto_reply_enabled": false
+    }
+  ]
+}
+```
+
+**失败响应（401）**
+```json
+{"success": false, "message": "token 无效或已过期，请重新登录"}
+```
+
+---
+
+#### POST `/api/client/logout` — 退出登录
+
+**请求头**
+```
+X-Client-Token: <client_token>
+```
+
+**成功响应（200）**
+```json
+{"success": true}
+```
+
+---
+
+#### POST `/api/client/refresh` — 刷新 Token 有效期
+
+**请求头**
+```
+X-Client-Token: <client_token>
+```
+
+**成功响应（200）**
+```json
+{"success": true, "expires_in": 604800}
+```
+
+**失败响应（401）**
+```json
+{"success": false, "message": "token 无效或已过期，请重新登录"}
+```
+
+---
+
+### 16.4 插件化接入完整说明
+
+客户端获得 `shop_token` 后，即可接入插件系统。完整生命周期：
+
+```
+1. 注册插件能力（启动时调用一次）
+2. 发送心跳（每 30 秒一次，保活）
+3. 轮询任务（每 2 秒一次，获取待执行任务）
+4. 执行任务（换号/退款/订单等业务逻辑）
+5. 回报结果（成功 /done，失败 /fail）
+```
+
+#### 第一步：注册插件
+
+```json
+POST /api/plugin/register
+X-Shop-Token: <shop_token>
+
+{
+  "plugin_id": "pdd_shop",
+  "name": "拼多多店铺插件",
+  "description": "自动换号、退款处理、订单同步",
+  "action_codes": ["auto_exchange", "handle_refund", "order_sync"],
+  "client_version": "2.0.0"
+}
+
+// 响应
+{"success": true, "message": "插件 pdd_shop 注册成功"}
+```
+
+#### 第二步：心跳保活
+
+```json
+POST /api/plugin/heartbeat
+X-Shop-Token: <shop_token>
+
+{"plugin_id": "pdd_shop"}
+
+// 响应
+{"success": true, "pending_tasks": 2}
+```
+
+#### 第三步：轮询任务
+
+```json
+GET /api/plugin/tasks?plugin_id=pdd_shop
+X-Shop-Token: <shop_token>
+
+// 响应
+{
+  "success": true,
+  "tasks": [
+    {
+      "id": 42,
+      "action_code": "auto_exchange",
+      "payload": {"buyer_id": "pdd_buyer_xxx", "order_id": "202501010001"},
+      "created_at": "2025-01-01T10:00:00"
+    }
+  ],
+  "count": 1
+}
+```
+
+#### 第四步：上报完成
+
+```json
+POST /api/plugin/tasks/42/done
+X-Shop-Token: <shop_token>
+
+{
+  "result": {
+    "new_account": "GAME_888",
+    "new_password": "pass123",
+    "order_id": "202501010001"
+  }
+}
+
+// 响应（含自动回复给买家的文案）
+{
+  "success": true,
+  "reply_to_buyer": "已为您换号，新账号：GAME_888，密码：pass123"
+}
+```
+
+#### 上报失败
+
+```json
+POST /api/plugin/tasks/42/fail
+X-Shop-Token: <shop_token>
+
+{
+  "result": {
+    "error": "U号租平台登录超时",
+    "order_id": "202501010001"
+  }
+}
+
+// 响应
+{"success": true}
+```
+
+---
+
+### 16.5 插件 action_codes 列表
+
+| action_code | 说明 | 业务场景 |
+|-------------|------|----------|
+| `auto_exchange` | 自动换号 | 游戏租号行业，买家要求换号 |
+| `handle_refund` | 退款处理 | 退款流程自动化 |
+| `order_sync` | 订单同步 | 拉取最新订单数据 |
+| `fetch_messages` | 消息同步 | 拉取平台消息 |
+| `uhaozu_exchange` | U号租换号 | U号租专区自动换号（预留） |
+| `uhaozu_select` | U号租选号 | U号租专区自动选号（预留） |
+| `uhaozu_order` | U号租下单 | U号租专区自动下单（预留） |
+| 自定义 | 任意字符串 | 在意图规则后台配置，客户端注册时声明支持 |
+
+> **注意**：`action_code` 不限于内置值，可在爱客服管理后台 → 意图规则 中自定义，客户端注册时在 `action_codes` 数组中声明即可接收对应任务。
+
+---
+
+### 16.6 客户端完整接入示例（Python）
+
+```python
+import requests
+
+SERVER = "https://example.com:6000"  # 生产环境请使用 HTTPS
+
+# 1. 登录获取 client_token
+resp = requests.post(f"{SERVER}/api/client/login", json={
+    "username": "admin",
+    "password": "admin123"
+})
+data = resp.json()
+client_token = data["client_token"]
+
+# 2. 获取名下所有店铺
+resp = requests.get(f"{SERVER}/api/client/shops", headers={
+    "X-Client-Token": client_token
+})
+shops = resp.json()["shops"]
+
+# 3. 为每个店铺注册插件并启动任务轮询
+for shop in shops:
+    shop_token = shop["shop_token"]
+    headers = {"X-Shop-Token": shop_token}
+
+    # 注册插件
+    requests.post(f"{SERVER}/api/plugin/register", headers=headers, json={
+        "plugin_id": "pdd_shop",
+        "name": "拼多多店铺插件",
+        "action_codes": ["auto_exchange", "handle_refund"],
+        "client_version": "2.0.0"
+    })
+
+    # 启动该店铺的心跳 + 任务轮询（每个店铺独立协程/线程）
+    # start_shop_runner(shop_token)  ← 客户端实现
+
+# 4. 客户端退出时登出
+requests.post(f"{SERVER}/api/client/logout", headers={
+    "X-Client-Token": client_token
+})
+```

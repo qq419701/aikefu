@@ -30,6 +30,9 @@ def get_beijing_time():
 def get_blacklist_cache_key(industry_id: int, buyer_id: str) -> str:
     """生成黑名单 Redis 缓存键（统一格式，避免多处重复）"""
     return f"blacklist:{industry_id}:{buyer_id}"
+
+
+def init_redis(app):
     """
     初始化 Redis 连接
     功能：尝试连接 Redis，失败时静默降级（不影响主流程）
