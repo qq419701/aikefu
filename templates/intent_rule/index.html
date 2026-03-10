@@ -66,7 +66,13 @@
                             <span class="fw-semibold">{{ rule.intent_name }}</span>
                         </td>
                         <!-- 意图标识码 -->
-                        <td><code class="small">{{ rule.intent_code }}</code></td>
+                        <td>
+                            <code class="text-danger small">{{ rule.intent_code }}</code>
+                            {% set _intent_label = rule.intent_code_label or intent_labels.get(rule.intent_code, '') %}
+                            {% if _intent_label %}
+                            <div class="text-muted" style="font-size:0.75rem;">{{ _intent_label }}</div>
+                            {% endif %}
+                        </td>
                         <!-- 触发关键词 -->
                         <td>
                             {% for kw in rule.get_keywords() %}
@@ -76,7 +82,11 @@
                         <!-- 插件动作码 -->
                         <td>
                             {% if rule.action_code %}
-                            <span class="badge bg-primary">{{ rule.action_code }}</span>
+                            <span class="badge" style="background:#0dcaf0;color:#000;">{{ rule.action_code }}</span>
+                            {% set _action_label = rule.action_code_label or action_labels.get(rule.action_code, '') %}
+                            {% if _action_label %}
+                            <div class="text-muted" style="font-size:0.75rem;">{{ _action_label }}</div>
+                            {% endif %}
                             {% else %}
                             <span class="text-muted small">—</span>
                             {% endif %}

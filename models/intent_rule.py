@@ -28,6 +28,9 @@ class IntentRule(db.Model):
     # 意图标识（如 exchange/refund/login），程序内部使用
     intent_code = db.Column(db.String(50), nullable=False)
 
+    # 意图标识中文说明（如 "换号请求 — 买家要求更换游戏账号"），选填
+    intent_code_label = db.Column(db.String(200), nullable=True)
+
     # 显示名（如 换号请求），后台管理界面显示用
     intent_name = db.Column(db.String(100), nullable=False)
 
@@ -36,6 +39,9 @@ class IntentRule(db.Model):
 
     # 触发的插件动作码（如 auto_exchange），可为空（无需插件处理的意图）
     action_code = db.Column(db.String(50), nullable=True)
+
+    # 插件动作码中文说明（如 "🔄 自动换号 — 触发U号租自动换号流程"），选填
+    action_code_label = db.Column(db.String(200), nullable=True)
 
     # 识别后立即回复的话术模板（如 "好的，正在为您换号，请稍候～"），可为空
     auto_reply_tpl = db.Column(db.Text, nullable=True)
@@ -90,3 +96,34 @@ class IntentRule(db.Model):
 
     def __repr__(self):
         return f'<IntentRule {self.intent_code}: {self.intent_name}>'
+
+    @staticmethod
+    def get_action_code_labels() -> dict:
+        """
+        内置动作码中文说明字典
+        用于前端下拉选择框展示，key=动作码，value=中文说明
+        """
+        return {
+            "auto_exchange":  "🔄 自动换号 — 触发U号租自动换号流程",
+            "handle_refund":  "💰 退款处理 — 记录退款申请，通知人工处理",
+            "auto_order":     "📦 自动下单 — 自动在U号租下单选号（开发中）",
+            "transfer_human": "👤 转人工 — 自动将会话转移给人工客服",
+            "refund_guide":   "📋 退款引导 — 引导买家申请退款流程",
+        }
+
+    @staticmethod
+    def get_intent_code_labels() -> dict:
+        """
+        常用意图标识中文说明字典
+        用于前端输入框提示
+        """
+        return {
+            "exchange":       "换号请求 — 买家要求更换游戏账号",
+            "refund":         "退款申请 — 买家申请退款或退货",
+            "login":          "登录问题 — 买家反映账号登录异常",
+            "complaint":      "投诉举报 — 买家投诉、差评或维权",
+            "query":          "查询咨询 — 买家询问订单、发货等信息",
+            "payment":        "付款问题 — 买家反映付款相关问题",
+            "transfer_human": "转人工 — 买家主动要求转接人工客服",
+            "other":          "其他 — 无法归类的其他意图",
+        }

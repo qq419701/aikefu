@@ -76,6 +76,8 @@ def index():
         rules=rules,
         industries=industries,
         industry_filter=industry_filter,
+        action_labels=IntentRule.get_action_code_labels(),
+        intent_labels=IntentRule.get_intent_code_labels(),
     )
 
 
@@ -100,6 +102,7 @@ def add():
             rule=None,
             industries=industries,
             action_codes=action_codes,
+            action_labels=IntentRule.get_action_code_labels(),
             title='新增意图规则',
         )
 
@@ -117,6 +120,8 @@ def add():
         done_reply_tpl = request.form.get('done_reply_tpl', '').strip()
         priority = request.form.get('priority', 0, type=int)
         is_active = request.form.get('is_active') == '1'
+        intent_code_label = request.form.get('intent_code_label', '').strip()
+        action_code_label = request.form.get('action_code_label', '').strip()
 
         if not intent_code or not intent_name:
             flash('意图标识和意图名称不能为空', 'danger')
@@ -139,6 +144,8 @@ def add():
             done_reply_tpl=done_reply_tpl or None,
             priority=priority,
             is_active=is_active,
+            intent_code_label=intent_code_label or None,
+            action_code_label=action_code_label or None,
             created_at=now,
             updated_at=now,
         )
@@ -184,6 +191,7 @@ def edit(rule_id: int):
             rule=rule,
             industries=industries,
             action_codes=action_codes,
+            action_labels=IntentRule.get_action_code_labels(),
             title=f'编辑规则：{rule.intent_name}',
         )
 
@@ -220,6 +228,8 @@ def edit(rule_id: int):
         rule.done_reply_tpl = done_reply_tpl or None
         rule.priority = priority
         rule.is_active = is_active
+        rule.intent_code_label = request.form.get('intent_code_label', '').strip() or None
+        rule.action_code_label = request.form.get('action_code_label', '').strip() or None
         rule.updated_at = get_beijing_time()
 
         db.session.commit()
