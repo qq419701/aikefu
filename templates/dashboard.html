@@ -269,7 +269,10 @@
 <script>
 function updateHealthStatus() {
     fetch('/dashboard/health')
-        .then(r => r.json())
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
         .then(function(data) {
             // 插件状态
             var p = data.plugin || {};
@@ -292,7 +295,15 @@ function updateHealthStatus() {
             document.getElementById('doubao-status-text').textContent =
                 '豆包AI ' + (d2.configured ? 'API已配置' : '未配置API Key');
         })
-        .catch(function(){});
+        .catch(function(err) {
+            document.getElementById('plugin-status-icon').textContent = '🔴';
+            document.getElementById('plugin-status-text').textContent = '插件状态获取失败';
+            document.getElementById('maxkb-status-icon').textContent = '🔴';
+            document.getElementById('maxkb-status-text').textContent = 'MaxKB状态获取失败';
+            document.getElementById('doubao-status-icon').textContent = '🔴';
+            document.getElementById('doubao-status-text').textContent = '豆包AI状态获取失败';
+            console.error('健康状态获取失败:', err);
+        });
 }
 
 setInterval(updateHealthStatus, 30000);

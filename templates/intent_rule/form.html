@@ -178,11 +178,15 @@ function updateActionCode(select) {
     if (select.value === '__custom__') {
         custom.style.display = 'block';
         finalInput.value = custom.value.trim();
+        // 手动输入时也尝试填充说明
+        if (labelInput) {
+            labelInput.value = actionLabels[custom.value.trim()] || '';
+        }
     } else {
         custom.style.display = 'none';
         finalInput.value = select.value;
-        // 自动填充说明（仅在说明框为空时填充）
-        if (labelInput && !labelInput.value) {
+        // 始终更新说明（不再判断是否为空）
+        if (labelInput) {
             labelInput.value = actionLabels[select.value] || '';
         }
     }
@@ -191,7 +195,7 @@ function updateActionCode(select) {
 // 手动输入动作码时也尝试自动填充说明
 document.getElementById('actionCodeCustom')?.addEventListener('input', function() {
     var labelInput = document.getElementById('action_code_label');
-    if (labelInput && !labelInput.value) {
+    if (labelInput) {
         labelInput.value = actionLabels[this.value.trim()] || '';
     }
 });
