@@ -391,6 +391,7 @@ def tasks():
     page = request.args.get('page', 1, type=int)
     status_filter = request.args.get('status', '')
     shop_id_filter = request.args.get('shop_id', type=int)
+    action_filter = request.args.get('action_code', '')
 
     if current_user.is_admin():
         shops = Shop.query.filter_by(is_active=True).all()
@@ -407,8 +408,10 @@ def tasks():
         query = query.filter_by(status=status_filter)
     if shop_id_filter and shop_id_filter in shop_ids:
         query = query.filter_by(shop_id=shop_id_filter)
+    if action_filter:
+        query = query.filter_by(action_code=action_filter)
 
-    tasks = query.order_by(PluginTask.created_at.desc()).paginate(
+    task_list = query.order_by(PluginTask.created_at.desc()).paginate(
         page=page, per_page=20
     )
 
@@ -423,12 +426,15 @@ def tasks():
         'failed': PluginTask.query.filter(
             PluginTask.shop_id.in_(shop_ids), PluginTask.status == 'failed'
         ).count(),
+        'total': PluginTask.query.filter(PluginTask.shop_id.in_(shop_ids)).count(),
     }
 
     return render_template('plugin/tasks.html',
-        tasks=tasks,
+        task_list=task_list,
         shops=shops,
         stats=stats,
         status_filter=status_filter,
         shop_id_filter=shop_id_filter,
+        status_options=['pending', 'claimed', 'done', 'failed'],
+        action_filter=action_filter,
     )
