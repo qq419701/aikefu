@@ -368,11 +368,22 @@ def index():
         ClientPlugin.shop_id.in_(shop_ids)
     ).order_by(ClientPlugin.created_at.desc()).all()
 
-    return render_template('plugins/index.html', plugins=plugins, shops=shops)
+    # 统计任务数量
+    stats = {
+        'total': len(plugins),
+        'online': sum(1 for p in plugins if p.is_online()),
+        'pending_tasks': PluginTask.query.filter_by(status='pending').count(),
+        'done_today': PluginTask.query.filter(
+            PluginTask.status == 'done',
+            PluginTask.done_at >= get_beijing_time().replace(hour=0, minute=0, second=0),
+        ).count(),
+    }
+
+    return render_template('plugin/index.html', plugins=plugins, shops=shops, stats=stats)
 
 @plugin_bp.route('/tasks')
 @login_required
-def task_list():
+def tasks():
     """
     任务记录列表
     功能：显示所有插件任务记录，支持按状态和店铺筛选
@@ -414,7 +425,7 @@ def task_list():
         ).count(),
     }
 
-    return render_template('plugins/tasks.html',
+    return render_template('plugin/tasks.html',
         tasks=tasks,
         shops=shops,
         stats=stats,

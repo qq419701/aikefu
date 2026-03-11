@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/www/wwwroot/aikefu/venv/bin/gunicorn", line 3, in <module>
+    from gunicorn.app.wsgiapp import run
+  File "/www/wwwroot/aikefu/venv/lib/python3.12/site-packages/gunicorn/app/wsgiapp.py", line 9, in <module>
+    from gunicorn.app.base import Application
+  File "/www/wwwroot/aikefu/venv/lib/python3.12/site-packages/gunicorn/app/base.py", line 11, in <module>
+    from gunicorn import util
+  File "/www/wwwroot/aikefu/venv/lib/python3.12/site-packages/gunicorn/util.py", line 6, in <module>
+    import email.utils
+  File "/usr/lib/python3.12/email/utils.py", line 28, in <module>
+    import random
+  File "/usr/lib/python3.12/random.py", line 54, in <module>
+    from math import log as _log, exp as _exp, pi as _pi, e as _e, ceil as _ceil
+ModuleNotFoundError: No module named 'math'
