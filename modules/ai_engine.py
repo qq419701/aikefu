@@ -149,6 +149,19 @@ class AIEngine:
         if action_code:
             # 获取立即回复话术模板
             auto_reply_tpl = self._get_auto_reply_tpl(intent, action_code, industry_id)
+            # 尝试从 PddOrder 表获取商品名
+            goods_name = ''
+            try:
+                from models.pdd_order import PddOrder
+                if order_id or order_sn:
+                    pdd_order = PddOrder.query.filter_by(
+                        shop_id=shop_id,
+                        order_id=order_sn or order_id
+                    ).first()
+                    if pdd_order:
+                        goods_name = pdd_order.goods_name or ''
+            except Exception:
+                pass
             # 尝试下发插件任务
             dispatched = False
             try:
@@ -161,6 +174,8 @@ class AIEngine:
                     message=message,
                     buyer_name=buyer_name,
                     order_sn=order_sn,
+                    goods_name=goods_name,
+                    target_agent='',
                 )
             except Exception:
                 pass
@@ -631,18 +646,23 @@ class AIEngine:
 
     def _dispatch_plugin_task(self, shop_id: int, intent: str, action_code: str,
                               buyer_id: str, order_id: str, message: str,
-                              buyer_name: str = '', order_sn: str = '') -> bool:
+                              buyer_name: str = '', order_sn: str = '',
+                              goods_name: str = '', target_agent: str = '') -> bool:
         """
         下发插件任务到任务队列
         功能：当意图识别为需要客户端操作的意图（如exchange/refund）时，
               创建PluginTask记录，等待客户端（dskehuduan）轮询获取并执行
         参数：
-            shop_id    - 店铺ID
-            intent     - 意图类型（exchange/refund等）
-            action_code - 插件动作码（如 auto_exchange），直接传入，不再从硬编码字典查
-            buyer_id   - 买家ID（任务参数）
-            order_id   - 订单号（任务参数）
-            message    - 买家原始消息（任务参数）
+            shop_id      - 店铺ID
+            intent       - 意图类型（exchange/refund等）
+            action_code  - 插件动作码（如 auto_exchange），直接传入，不再从硬编码字典查
+            buyer_id     - 买家ID（任务参数）
+            order_id     - 订单号（任务参数）
+            message      - 买家原始消息（任务参数）
+            buyer_name   - 买家昵称（任务参数）
+            order_sn     - 拼多多真实订单号（任务参数，无则传空字符串）
+            goods_name   - 商品名（任务参数，找不到传空字符串）
+            target_agent - 指定转给哪个客服（空字符串=自动按策略选择）
         返回：True=任务下发成功，False=无可用插件或下发失败
         说明：客户端通过 GET /api/plugin/tasks 轮询获取待执行任务
         """
@@ -671,12 +691,14 @@ class AIEngine:
             plugin_id=target_plugin.plugin_id,
             action_code=action_code,
             payload=json.dumps({
-                'buyer_id': buyer_id,
-                'buyer_name': buyer_name,
-                'order_id': order_id or '',
-                'order_sn': order_sn or order_id,
-                'message': message,
-                'intent': intent,
+                'buyer_id':     buyer_id,
+                'buyer_name':   buyer_name,
+                'order_id':     order_id or '',
+                'order_sn':     order_sn or '',
+                'message':      message,
+                'intent':       intent,
+                'goods_name':   goods_name,
+                'target_agent': target_agent,
             }, ensure_ascii=False),
             status='pending',
             created_at=get_beijing_time(),

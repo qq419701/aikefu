@@ -41,6 +41,7 @@
                 <thead class="table-light">
                     <tr>
                         <th>任务ID</th>
+                        <th>买家信息</th>
                         <th>动作码</th>
                         <th>插件ID</th>
                         <th>状态</th>
@@ -54,6 +55,14 @@
                     <!-- 任务记录行 -->
                     <tr>
                         <td><code class="small">{{ task.task_id[:8] }}...</code></td>
+                        <td>
+                            {% set p = task.get_payload() %}
+                            <div class="fw-semibold small">{{ p.get('buyer_name', '-') }}</div>
+                            <small class="text-muted">{{ p.get('buyer_id', '') }}</small>
+                            {% if p.get('order_sn') %}
+                            <br><small class="text-muted">订单：{{ p.get('order_sn') }}</small>
+                            {% endif %}
+                        </td>
                         <td><span class="badge bg-primary">{{ task.action_code }}</span></td>
                         <td><small>{{ task.plugin_id }}</small></td>
                         <td>
