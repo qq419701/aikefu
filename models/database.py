@@ -72,12 +72,15 @@ def init_db(app):
     with app.app_context():
         # 提前导入所有模型，确保 create_all 能创建所有表
         from .intent_rule import IntentRule  # noqa: F401
+        from .system_config import SystemConfig  # noqa: F401
 
         # 创建所有数据表
         db.create_all()
 
         # 插入初始数据（行业分类、管理员账号等）
         _insert_default_data(app)
+        # 初始化系统配置默认值
+        _init_system_configs(app)
 
 
 def _insert_default_data(app):
@@ -120,6 +123,45 @@ def _insert_default_data(app):
 
     # 插入默认意图规则
     _init_intent_rules()
+
+
+def _init_system_configs(app):
+    """初始化系统配置默认值"""
+    defaults = [
+        # ---- AI参数配置 ----
+        dict(key='doubao_api_key',     label='豆包API Key',      group='ai', value_type='string', is_secret=True,  description='从火山方舟控制台获取', need_restart=False, value=''),
+        dict(key='doubao_lite_model',  label='Lite模型名称',     group='ai', value_type='string', description='用于意图识别/多轮对话/FAQ（速度快）', value='doubao-lite-32k'),
+        dict(key='doubao_pro_model',   label='Pro模型名称',      group='ai', value_type='string', description='用于退款决策/情绪安抚（更准确）', value='doubao-pro-32k'),
+        dict(key='doubao_max_tokens',  label='AI最大Token数',    group='ai', value_type='int',    description='单次AI回复的最大Token数，越大回复越详细但越贵', value='500'),
+        dict(key='doubao_temperature', label='AI温度参数',        group='ai', value_type='float',  description='0.0=精确稳定，1.0=创意多变，建议0.3', value='0.3'),
+        # ---- 多轮对话/上下文配置 ----
+        dict(key='max_context_turns',       label='多轮对话保留轮次',  group='context', value_type='int',   description='每轮=买家+AI各一条，保留越多记忆越好但越贵', value='10'),
+        dict(key='context_timeout_minutes', label='会话超时分钟',      group='context', value_type='int',   description='超过此时间无消息则重置上下文', value='30'),
+        # ---- 知识库配置 ----
+        dict(key='maxkb_enabled',         label='启用MaxKB语义检索', group='knowledge', value_type='bool',   description='true=使用MaxKB向量检索（命中率更高），false=关键词相似度', value='false'),
+        dict(key='maxkb_api_url',         label='MaxKB服务地址',     group='knowledge', value_type='string', description='MaxKB的HTTP地址，如 http://localhost:8080', value='http://localhost:8080'),
+        dict(key='maxkb_api_key',         label='MaxKB API Key',     group='knowledge', value_type='string', is_secret=True, description='MaxKB后台生成的API密钥', value=''),
+        dict(key='maxkb_dataset_id',      label='MaxKB数据集ID',     group='knowledge', value_type='string', description='MaxKB后台创建数据集后获取的ID', value=''),
+        dict(key='knowledge_similarity',  label='知识库相似度阈值',   group='knowledge', value_type='float',  description='0.0-1.0，超过此值才认为匹配，越高越精准但漏匹配越多', value='0.6'),
+        dict(key='maxkb_min_similarity',  label='MaxKB最低相似度',   group='knowledge', value_type='float',  description='MaxKB检索时低于此分数不返回结果', value='0.6'),
+        # ---- 系统行为配置 ----
+        dict(key='auto_reply_delay_min',      label='自动回复最小延迟(秒)', group='behavior', value_type='int',   description='模拟人工输入，避免平台检测', value='1'),
+        dict(key='auto_reply_delay_max',      label='自动回复最大延迟(秒)', group='behavior', value_type='int',   description='模拟人工输入，避免平台检测', value='3'),
+        dict(key='human_intervention_level',  label='情绪转人工等级',        group='behavior', value_type='int',   description='0=正常,1=轻度,2=中度,3=严重,4=危机。达到此等级转人工', value='3'),
+        dict(key='blacklist_refund_threshold',label='黑名单退款次数阈值',    group='behavior', value_type='int',   description='30天内超过此次数自动加入风险名单', value='3'),
+        dict(key='data_retention_days',       label='数据保留天数',           group='behavior', value_type='int',   description='日志和消息记录保留天数', value='90'),
+    ]
+    from models.system_config import SystemConfig
+    for d in defaults:
+        if not SystemConfig.query.filter_by(key=d['key']).first():
+            cfg = SystemConfig(
+                key=d['key'], value=d.get('value', ''), value_type=d['value_type'],
+                group=d['group'], label=d['label'], description=d.get('description', ''),
+                need_restart=d.get('need_restart', False), is_secret=d.get('is_secret', False),
+                updated_at=get_beijing_time()
+            )
+            db.session.add(cfg)
+    db.session.commit()
 
 
 def _init_intent_rules():

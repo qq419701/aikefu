@@ -183,13 +183,6 @@
             </li>
             
             <li class="nav-item">
-                <a class="nav-link {% if request.blueprint == 'rules' %}active{% endif %}"
-                   href="{{ url_for('rules.index') }}">
-                    <i class="bi bi-lightning-charge"></i>规则引擎
-                </a>
-            </li>
-            
-            <li class="nav-item">
                 <a class="nav-link {% if request.blueprint == 'knowledge' %}active{% endif %}"
                    href="{{ url_for('knowledge.index') }}">
                     <i class="bi bi-book"></i>知识库
@@ -224,6 +217,17 @@
                     <i class="bi bi-bag-check text-danger"></i>拼多多订单
                 </a>
             </li>
+
+            {% if current_user.is_admin() %}
+            <!-- 管理员功能 -->
+            <div class="sidebar-heading mt-2">管理员</div>
+            <li class="nav-item">
+                <a class="nav-link {% if request.blueprint == 'settings' %}active{% endif %}"
+                   href="/settings/">
+                    <i class="bi bi-gear"></i>⚙️ 系统设置
+                </a>
+            </li>
+            {% endif %}
 
             <!-- 预留接入（占位） -->
             <div class="sidebar-heading mt-2">预留功能（开发中）</div>
@@ -370,5 +374,31 @@ updateRiskBadges();
 </script>
 
 {% block extra_js %}{% endblock %}
+
+<!-- 页面帮助悬浮按钮（全局） -->
+<div id="page-help-btn" style="position:fixed;bottom:24px;right:24px;z-index:9999;display:none;">
+  <button class="btn btn-info rounded-circle shadow-lg" onclick="togglePageHelp()" title="页面帮助"
+          style="width:48px;height:48px;font-size:1.2rem;">
+    <i class="bi bi-question-circle"></i>
+  </button>
+</div>
+<div id="page-help-panel" style="display:none;position:fixed;bottom:80px;right:24px;z-index:9998;width:320px;max-height:400px;overflow-y:auto;" class="card shadow-lg">
+  <div class="card-header bg-info text-white py-2 d-flex justify-content-between align-items-center">
+    <span id="page-help-title">页面使用帮助</span>
+    <button class="btn-close btn-close-white btn-sm" onclick="togglePageHelp()"></button>
+  </div>
+  <div class="card-body small" id="page-help-content">正在加载...</div>
+</div>
+<script>
+function togglePageHelp() {
+  var panel = document.getElementById('page-help-panel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+function setPageHelp(title, html) {
+  document.getElementById('page-help-btn').style.display = 'block';
+  document.getElementById('page-help-title').innerText = title;
+  document.getElementById('page-help-content').innerHTML = html;
+}
+</script>
 </body>
 </html>

@@ -11,13 +11,13 @@ from .knowledge import KnowledgeBase
 from .message import Message, MessageCache
 from .user import User
 from .blacklist import Blacklist
-from .rule import Rule
 from .stats import DailyStats
 from .conversation import ConversationContext
 # RefundRecord 不再导出（退款管理模块已删除），但保留 models/refund.py 防止数据库迁移报错
 from .learning import LearningRecord
 from .pdd_order import PddOrder
 from .plugin import ClientPlugin, PluginTask
+from .system_config import SystemConfig
 
 __all__ = [
     'db', 'init_db',
@@ -26,10 +26,10 @@ __all__ = [
     'Message', 'MessageCache',
     'User',
     'Blacklist',
-    'Rule',
     'DailyStats',
     'ConversationContext',
     'LearningRecord',
     'PddOrder',
     'ClientPlugin', 'PluginTask',
+    'SystemConfig',
 ]

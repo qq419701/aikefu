@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-AI主引擎模块（三层处理核心 + 意图识别 + 多轮对话）
-功能说明：整合规则引擎、知识库引擎、豆包AI，实现三层递进处理
+AI主引擎模块（二层处理核心 + 意图识别 + 多轮对话）
+功能说明：整合知识库引擎、豆包AI，实现二层递进处理
 处理流程：
-  第〇层：本地意图识别 → 0成本0延迟，覆盖80%意图判断场景
-  第一层：规则引擎 → 0成本，目标覆盖20%消息
-  第二层：知识库 → 0成本，目标覆盖55%消息
-  第三层：豆包AI → 有成本，处理剩余25%消息
+  第〇层：本地意图识别（从数据库读取，可热更新，0成本0延迟）
+          → 有 action_code → 下发插件任务 + 立即话术回复
+          → 有 auto_reply_tpl，无 action_code → 纯文字话术回复（跳过后续层）
+          → 未命中 → 继续
+  第一层：知识库检索（MaxKB语义 or 关键词相似，0成本）
+  第二层：豆包AI多轮对话（有成本，兜底）
 增强功能：
   - 本地意图识别（0成本，覆盖80%场景，未命中才调豆包）
   - 多轮对话上下文（30分钟内保持会话连续性）
@@ -19,7 +21,6 @@ AI主引擎模块（三层处理核心 + 意图识别 + 多轮对话）
 import uuid
 import time
 import random
-from .rules_engine import RulesEngine
 from .knowledge_engine import KnowledgeEngine
 from .doubao_ai import DoubaoAI
 from .emotion_detector import EmotionDetector
@@ -43,9 +44,8 @@ class AIEngine:
     """
 
     def __init__(self):
-        """初始化三层引擎、情绪识别器"""
+        """初始化二层引擎、情绪识别器"""
         from .context_store import ContextStore
-        self.rules_engine = RulesEngine()
         self.knowledge_engine = KnowledgeEngine(
             similarity_threshold=config.KNOWLEDGE_SIMILARITY_THRESHOLD
         )
@@ -57,12 +57,12 @@ class AIEngine:
                         message: str, order_id: str = '', order_sn: str = '',
                         msg_type: str = 'text', image_url: str = '') -> dict:
         """
-        处理买家消息（三层处理主入口）
+        处理买家消息（二层处理主入口）
         功能：
             1. 检查黑名单
             2. 意图识别（doubao-lite，快速判断）
             3. 情绪识别
-            4. 依次尝试：规则引擎 → 知识库 → 豆包AI
+            4. 依次尝试：知识库 → 豆包AI
             5. 多轮对话上下文管理
             6. 记录消息日志
         参数：
@@ -134,8 +134,10 @@ class AIEngine:
                 appease = '您好，您的消息已收到，专属客服将尽快为您处理。'
 
             self._update_message_record(msg_record, 'human', 0, True)
+            reply_text = appease or '您的问题正在处理中，请稍候。'
+            self._save_reply_message(shop_id, buyer_id, buyer_name, order_id, reply_text, 'human')
             return {
-                'reply': appease or '您的问题正在处理中，请稍候。',
+                'reply': reply_text,
                 'process_by': 'human',
                 'needs_human': True,
                 'emotion_level': emotion_level,
@@ -182,6 +184,7 @@ class AIEngine:
             # 下发成功且有立即回复模板 → 立即回复买家，跳过AI处理
             if dispatched and auto_reply_tpl:
                 self._update_message_record(msg_record, 'plugin', 0)
+                self._save_reply_message(shop_id, buyer_id, buyer_name, order_id, auto_reply_tpl, 'plugin')
                 return {
                     'reply': auto_reply_tpl,
                     'process_by': 'plugin',
@@ -209,6 +212,9 @@ class AIEngine:
                 self._update_message_record(
                     msg_record, process_by, refund_result.get('tokens', 0), needs_human
                 )
+                self._save_reply_message(shop_id, buyer_id, buyer_name, order_id,
+                                         refund_result['reply'], process_by,
+                                         refund_result.get('tokens', 0))
                 return {
                     'reply': refund_result['reply'],
                     'process_by': process_by,
@@ -226,6 +232,8 @@ class AIEngine:
                 system_prompt = shop.get_effective_prompt()
                 result = self.doubao_ai.analyze_image(image_url, message, system_prompt)
                 self._update_message_record(msg_record, 'ai', result.get('tokens', 0))
+                self._save_reply_message(shop_id, buyer_id, buyer_name, order_id,
+                                         result['reply'], 'ai_vision', result.get('tokens', 0))
                 return {
                     'reply': result['reply'],
                     'process_by': 'ai_vision',
@@ -237,6 +245,8 @@ class AIEngine:
                 }
             else:
                 self._update_message_record(msg_record, 'human', 0, True)
+                self._save_reply_message(shop_id, buyer_id, buyer_name, order_id,
+                                         '收到您的图片，请稍候，客服将为您处理。', 'human')
                 return {
                     'reply': '收到您的图片，请稍候，客服将为您处理。',
                     'process_by': 'human',
@@ -247,27 +257,50 @@ class AIEngine:
                     'success': True,
                 }
 
-        # === 三层文字消息处理 ===
+        # 5.6 意图命中但无 action_code（纯文字回复意图）
+        # 说明：运营在意图规则中设置了 auto_reply_tpl 但不需要插件执行的场景
+        if intent != 'other' and not action_code:
+            try:
+                from models.intent_rule import IntentRule
+                pure_reply_rule = IntentRule.query.filter(
+                    IntentRule.intent_code == intent,
+                    IntentRule.action_code == None,  # noqa: E711
+                    IntentRule.auto_reply_tpl != None,  # noqa: E711
+                    IntentRule.auto_reply_tpl != '',
+                    IntentRule.is_active.is_(True),
+                    db.or_(
+                        IntentRule.industry_id == industry_id,
+                        IntentRule.industry_id == None,  # noqa: E711
+                    )
+                ).order_by(IntentRule.priority.asc()).first()
 
-        # 第一层：规则引擎（0成本）
-        rule_result = self.rules_engine.match(message, industry_id)
-        if rule_result:
-            self._update_message_record(msg_record, 'rule', 0)
-            return {
-                'reply': rule_result['reply'],
-                'process_by': 'rule',
-                'needs_human': False,
-                'emotion_level': emotion_level,
-                'intent': intent,
-                'action': rule_result.get('action', ''),
-                'action_params': rule_result.get('action_params', {}),
-                'success': True,
-            }
+                if pure_reply_rule and pure_reply_rule.auto_reply_tpl:
+                    reply_text = pure_reply_rule.auto_reply_tpl
+                    reply_text = reply_text.replace('{buyer_name}', buyer_name or '亲')
+                    reply_text = reply_text.replace('{order_id}', order_id or '')
+                    self._update_message_record(msg_record, 'intent_reply', 0)
+                    self._save_reply_message(shop_id, buyer_id, buyer_name, order_id,
+                                             reply_text, 'intent_reply')
+                    return {
+                        'reply': reply_text,
+                        'process_by': 'intent_reply',
+                        'needs_human': False,
+                        'emotion_level': emotion_level,
+                        'intent': intent,
+                        'action': '',
+                        'success': True,
+                    }
+            except Exception:
+                pass
 
-        # 第二层：知识库检索（0成本）
+        # === 二层文字消息处理 ===
+
+        # 第一层：知识库检索（0成本）
         kb_result = self.knowledge_engine.search(message, industry_id)
         if kb_result:
             self._update_message_record(msg_record, 'knowledge', 0)
+            self._save_reply_message(shop_id, buyer_id, buyer_name, order_id,
+                                     kb_result['reply'], 'knowledge')
             return {
                 'reply': kb_result['reply'],
                 'process_by': 'knowledge',
@@ -278,7 +311,7 @@ class AIEngine:
                 'success': True,
             }
 
-        # 第三层：豆包AI多轮对话（doubao-lite，有成本）
+        # 第二层：豆包AI多轮对话（doubao-lite，有成本）
         system_prompt = shop.get_effective_prompt()
         context_history = self.context_store.get_context(shop_id, buyer_id)
 
@@ -300,6 +333,8 @@ class AIEngine:
                                             timeout_minutes=config.CONTEXT_TIMEOUT_MINUTES)
 
         self._update_message_record(msg_record, 'ai', ai_result.get('tokens', 0))
+        self._save_reply_message(shop_id, buyer_id, buyer_name, order_id,
+                                 ai_result.get('reply', ''), 'ai', ai_result.get('tokens', 0))
 
         # AI处理完成后，触发实时增量学习检查
         # 说明：当AI回复置信度低或同一问题高频出现时，自动创建学习记录（review_status=pending）
@@ -421,6 +456,35 @@ class AIEngine:
         db.session.add(msg)
         db.session.commit()
         return msg
+
+    def _save_reply_message(self, shop_id: int, buyer_id: str, buyer_name: str,
+                             order_id: str, reply: str, process_by: str,
+                             token_used: int = 0):
+        """
+        保存AI/插件回复消息到数据库（direction='out'）
+        功能：记录所有发出的回复，用于消息管理页面展示完整对话
+        """
+        if not reply:
+            return
+        try:
+            out_msg = Message(
+                shop_id=shop_id,
+                buyer_id=buyer_id,
+                buyer_name=buyer_name,
+                order_id=order_id,
+                direction='out',
+                content=reply,
+                msg_type='text',
+                process_by=process_by,
+                token_used=token_used,
+                needs_human=False,
+                status='sent',
+                msg_time=get_beijing_time(),
+            )
+            db.session.add(out_msg)
+            db.session.commit()
+        except Exception:
+            pass
 
     def _update_message_record(self, msg: Message, process_by: str,
                                token_used: int, needs_human: bool = False):
