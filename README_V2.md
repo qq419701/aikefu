@@ -1,6 +1,6 @@
 # 爱客服AI智能客服系统 V2 技术架构文档
 
-> 版本：v2.0.0 | 更新时间：2026-03-09 | 语言：Python 3.11+ / Flask 3.x
+> 版本：v2.1.0 | 更新时间：2026-03-11 | 语言：Python 3.11+ / Flask 3.x
 
 ---
 
@@ -16,23 +16,26 @@
 │  │  买家消息                                                          │   │
 │  │      ↓                                                            │   │
 │  │  [第〇层] 本地意图识别（数据库规则，可热更新，0成本0延迟）             │   │
-│  │      ↓ 命中 action_code                                           │   │
-│  │  [插件分流] 下发PluginTask → 立即回复 auto_reply_tpl → 跳过AI      │   │
-│  │      ↓ 无插件接管 / 纯意图                                         │   │
+│  │      ↓ 命中 action_code → 插件分流 → 立即回复 auto_reply_tpl → 跳过AI│   │
+│  │      ↓ 命中 无action_code + 有auto_reply_tpl → 纯文字立即回复 → 跳过AI│   │
+│  │      ↓ 无插件接管 / 未命中                                         │   │
 │  │  [黑名单检查] → [情绪检测] → [退款AI决策] → [图片分析]              │   │
 │  │      ↓                                                            │   │
-│  │  [第一层] 规则引擎（关键词匹配，0成本，目标20%覆盖）                  │   │
+│  │  [第一层] 知识库引擎（关键词/MaxKB语义，0成本，目标60%覆盖）          │   │
 │  │      ↓ 未命中                                                     │   │
-│  │  [第二层] 知识库引擎（关键词/MaxKB语义，0成本，目标55%覆盖）          │   │
-│  │      ↓ 未命中                                                     │   │
-│  │  [第三层] 豆包AI（lite/pro/vision多模态，有成本，目标25%覆盖）        │   │
+│  │  [第二层] 豆包AI（lite/pro/vision多模态，有成本，目标35%兜底）        │   │
 │  └───────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
 │  ┌────────────────┐  ┌────────────────┐  ┌─────────────────────────┐    │
-│  │  知识库管理     │  │  实时增量学习   │  │  意图规则管理（新）      │    │
+│  │  知识库管理     │  │  实时增量学习   │  │  意图规则管理            │    │
 │  │  aikefu后台    │  │  AI回复→待审核  │  │  数据库驱动，后台可配置  │    │
 │  │  同步→MaxKB    │  │  运营审核→入库  │  │  关键词/动作/话术全配置  │    │
 │  └────────────────┘  └────────────────┘  └─────────────────────────┘    │
+│                                                                          │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │  系统设置（/settings/，SystemConfig 数据库表）                     │    │
+│  │  豆包/MaxKB/系统行为/安全 四组可视化配置，替代 .env 硬编码          │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
 │                                                                          │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │  插件系统（models/plugin.py + routes/plugin.py）                  │    │
@@ -85,10 +88,10 @@ aikefu/
 │   ├── industry.py         # 行业（多租户中心表）
 │   ├── shop.py             # 店铺（含shop_token鉴权）
 │   ├── user.py             # 用户（admin/operator角色）
-│   ├── message.py          # 消息记录
+│   ├── message.py          # 消息记录（含direction='in'/'out'，完整对话记录）★更新
 │   ├── knowledge.py        # 知识库条目
-│   ├── rule.py             # 规则引擎条目
-│   ├── intent_rule.py      # 意图规则（可自定义关键词+话术）★新
+│   ├── intent_rule.py      # 意图规则（可自定义关键词+话术）
+│   ├── system_config.py    # 系统配置（可视化编辑替代.env）★新
 │   ├── plugin.py           # 插件注册+任务队列
 │   ├── conversation.py     # 多轮对话上下文
 │   ├── learning.py         # 增量学习记录
@@ -97,12 +100,11 @@ aikefu/
 │   └── stats.py            # 每日统计
 │
 ├── modules/                # 核心业务逻辑
-│   ├── ai_engine.py        # 消息处理主引擎（三层+意图+插件）
+│   ├── ai_engine.py        # 消息处理主引擎（二层+意图+插件）
 │   ├── doubao_ai.py        # 火山方舟API客户端
 │   ├── emotion_detector.py # 情绪识别（5级，本地规则）
 │   ├── knowledge_engine.py # 知识库检索（关键词/MaxKB）
 │   ├── maxkb_client.py     # MaxKB语义检索客户端（可选）
-│   ├── rules_engine.py     # 规则引擎（any/all/exact匹配）
 │   └── scheduler.py        # APScheduler定时任务
 │
 ├── routes/                 # Flask蓝图路由
@@ -111,8 +113,8 @@ aikefu/
 │   ├── industry.py         # 行业管理CRUD
 │   ├── shop.py             # 店铺管理CRUD
 │   ├── knowledge.py        # 知识库管理+AI批量生成
-│   ├── rules.py            # 规则引擎管理
-│   ├── intent_rule.py      # 意图规则管理★新
+│   ├── intent_rule.py      # 意图规则管理
+│   ├── settings.py         # 系统设置页面（/settings/）★新
 │   ├── messages.py         # 消息记录管理
 │   ├── learning.py         # 学习中心（审核AI回复）
 │   ├── blacklist.py        # 黑名单管理
@@ -124,9 +126,11 @@ aikefu/
 │
 └── templates/              # Jinja2模板（继承base.html）
     ├── base.html           # 侧边栏布局（Bootstrap 5）
-    ├── intent_rule/        # 意图规则管理页面★新
+    ├── intent_rule/        # 意图规则管理页面
     │   ├── index.html      # 规则列表（关键词badge、AJAX开关）
     │   └── form.html       # 新增/编辑表单
+    ├── settings/           # 系统设置模板★新
+    │   └── index.html      # 设置首页（分Tab展示）
     └── plugin/
         ├── index.html      # 插件列表（在线状态、动作码）
         └── tasks.html      # 任务执行记录
@@ -141,10 +145,9 @@ aikefu/
 | `industries` | Industry | 行业（多租户中心表，全局隔离） |
 | `shops` | Shop | 店铺（含`shop_token`用于客户端鉴权） |
 | `users` | User | 管理员/操作员，绑定行业 |
-| `rules` | Rule | 规则引擎条目（第一层） |
-| `knowledge_base` | KnowledgeBase | 知识库（第二层，关键词+语义） |
-| `intent_rules` | IntentRule | **意图规则**（可自定义关键词/动作/话术）★新 |
-| `messages` | Message | 消息记录（含处理方式、情绪级别） |
+| `knowledge_base` | KnowledgeBase | 知识库（第一层，关键词+语义） |
+| `intent_rules` | IntentRule | **意图规则**（可自定义关键词/动作/话术） |
+| `messages` | Message | 消息记录（direction='in'买家消息/'out'AI回复，含process_by、emotion_level）★更新 |
 | `message_cache` | MessageCache | AI回复缓存（归一化哈希，24h TTL） |
 | `conversation_contexts` | ConversationContext | 多轮对话上下文（30min超时） |
 | `learning_records` | LearningRecord | 增量学习待审核记录 |
@@ -152,6 +155,7 @@ aikefu/
 | `client_plugins` | ClientPlugin | 客户端插件注册（含心跳、动作码） |
 | `plugin_tasks` | PluginTask | 插件任务队列（UUID、FIFO、状态流转） |
 | `pdd_orders` | PddOrder | 拼多多订单（多来源：插件/客户端/手动） |
+| `system_configs` | SystemConfig | 系统配置KV表（替代.env硬编码）★新 |
 | `daily_stats` | DailyStats | 每日统计（消息量/AI成本/各层覆盖率） |
 
 ### `intent_rules` 表字段详情（★核心新表）
@@ -182,6 +186,19 @@ aikefu/
 | 4 | `query` | 查询咨询 | — |
 | 5 | `payment` | 付款问题 | — |
 
+### `system_configs` 表字段详情（★新表）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | Integer PK | 主键 |
+| `key` | VARCHAR(100) UNIQUE | 配置键（如 `doubao_api_key`） |
+| `value` | Text | 配置值 |
+| `value_type` | VARCHAR(20) | 值类型（string/int/float/bool） |
+| `group` | VARCHAR(50) | 分组（ai/knowledge/system/security） |
+| `label` | VARCHAR(200) | 显示名称（中文） |
+| `description` | Text | 配置说明 |
+| `updated_at` | DateTime | 最后修改时间 |
+
 ---
 
 ## 5. 消息处理完整流程（已更新）
@@ -191,15 +208,18 @@ aikefu/
        ↓
 [0] 本地意图识别（读 intent_rules 表，可热更新，0成本0延迟）
     按行业规则优先→全局规则，按 priority 升序匹配关键词
-    命中 → 返回 (intent_code, action_code)
-    未命中 → 调豆包lite识别意图（有成本）
+    命中 → 返回 (intent_code, action_code, auto_reply_tpl)
+    未命中 → 调豆包lite识别意图（有成本，兜底）
        ↓
-[0.5] ★ 插件任务提前分流（新逻辑）
+[0.5] 插件任务提前分流
     有 action_code AND 有在线插件
        → 创建 PluginTask（pending）
-       → 立即返回 auto_reply_tpl 发给买家（跳过三层AI）
-    无可用插件 OR 无 action_code → 继续后续流程
-       ↓
+       → 立即返回 auto_reply_tpl（process_by='plugin'）→ 跳过知识库+AI
+    ↓
+[0.6] ★ 纯文字意图回复（新增）
+    无 action_code BUT 有 auto_reply_tpl（意图识别命中，无需插件）
+       → 直接返回 auto_reply_tpl（process_by='intent_reply'）→ 跳过知识库+AI
+    ↓
 [1] 黑名单检查
     在黑名单 → 转人工（安抚回复）
        ↓
@@ -213,18 +233,21 @@ aikefu/
 [4] 图片消息处理
     msg_type==image → doubao-vision-pro 图片分析
        ↓
-[5] 三层文字消息处理
-    第一层：规则引擎（关键词精确匹配）→ 命中直接返回
-    第二层：知识库（MaxKB语义 或 关键词重叠率≥0.6）→ 命中直接返回
-    第三层：豆包AI多轮对话（doubao-lite，带缓存，带上下文）
+[5] 二层文字消息处理（原三层，规则引擎已删除）
+    第一层：知识库（MaxKB语义 或 关键词重叠率≥0.6）→ 命中直接返回（process_by='knowledge'）
+    第二层：豆包AI多轮对话（doubao-lite，带缓存，带上下文）→ process_by='ai'
        ↓
-[6] 实时增量学习触发（AI处理后）
+[6] 消息全记录（★新增）
+    买家消息保存 direction='in'
+    AI/插件回复保存 direction='out'（与买家消息关联，可在消息管理页查看完整对话）
+       ↓
+[7] 实时增量学习触发（AI处理后）
     低置信度词 OR 同问题7天内≥2次 → 创建 LearningRecord（待审核）
 ```
 
 ---
 
-## 6. 意图规则系统（★新功能）
+## 6. 意图规则系统
 
 ### 6.1 设计目标
 
@@ -234,6 +257,8 @@ aikefu/
 - 调整意图优先级
 - 配置插件动作码
 - 编写立即回复话术 / 完成回复话术
+
+> v2.1 新增：意图规则现在支持**纯文字回复**（`action_code` 为空，`auto_reply_tpl` 非空），不需要插件也能直接配置意图话术，例如"发货时间咨询"、"营业时间"等FAQ类意图。
 
 ### 6.2 识别逻辑
 
@@ -290,6 +315,19 @@ POST /api/plugin/tasks/<id>/done
 | `{order_id}` | 订单号 |
 | `{message}` | 自定义消息 |
 | `{error}` | 失败时的错误原因 |
+
+### 6.5 纯文字意图回复（v2.1新增）
+
+```
+场景：买家问"你们几点开始营业"
+       ↓
+命中 intent_rules: business_hours / action_code=NULL / auto_reply_tpl="我们每天9:00-23:00在线，随时为您服务😊"
+       ↓
+process_by = 'intent_reply'
+直接返回话术，跳过知识库和AI（0成本0延迟）
+```
+
+说明：`process_by='intent_reply'` 会被统计在控制台的「意图回复」命中率中，适合FAQ类意图（营业时间、发货时间、退款政策等），无需插件即可0成本直接回复。
 
 ---
 
@@ -382,19 +420,20 @@ Response:
 | GET | `/knowledge/generate` | knowledge | AI批量生成页 |
 | POST | `/knowledge/api/generate` | knowledge | AI生成（JSON） |
 | POST | `/knowledge/api/batch-save` | knowledge | 批量保存（JSON） |
-| GET | `/rules/` | rules | 规则列表 |
-| GET/POST | `/rules/add` | rules | 新增规则 |
-| GET/POST | `/rules/<id>/edit` | rules | 编辑规则 |
-| POST | `/rules/<id>/toggle` | rules | 启用/禁用 |
-| POST | `/rules/<id>/delete` | rules | 删除规则 |
-| GET | `/intent-rules/` | intent_rule | **意图规则列表** ★新 |
-| GET/POST | `/intent-rules/add` | intent_rule | **新增意图规则** ★新 |
-| GET/POST | `/intent-rules/<id>/edit` | intent_rule | **编辑意图规则** ★新 |
-| POST | `/intent-rules/<id>/toggle` | intent_rule | **启用/禁用（JSON）** ★新 |
-| POST | `/intent-rules/<id>/delete` | intent_rule | **删除意图规则** ★新 |
+| GET | `/intent-rules/` | intent_rule | 意图规则列表 |
+| GET/POST | `/intent-rules/add` | intent_rule | 新增意图规则 |
+| GET/POST | `/intent-rules/<id>/edit` | intent_rule | 编辑意图规则 |
+| POST | `/intent-rules/<id>/toggle` | intent_rule | 启用/禁用（JSON） |
+| POST | `/intent-rules/<id>/delete` | intent_rule | 删除意图规则 |
+| GET | `/settings/` | settings | 系统设置首页 ★新 |
+| POST | `/settings/save` | settings | 保存配置 ★新 |
+| POST | `/settings/test-doubao` | settings | 测试豆包连接 ★新 |
+| POST | `/settings/test-maxkb` | settings | 测试MaxKB连接 ★新 |
 | GET | `/messages/` | messages | 消息记录 |
 | POST | `/messages/<id>/mark-handled` | messages | 标记处理 |
 | GET | `/messages/api/stats` | messages | 实时统计（JSON） |
+| GET | `/messages/<buyer_id>/conversation` | messages | 查看某买家完整对话（气泡视图）★新 |
+| GET | `/messages/api/conversation/<buyer_id>` | messages | 获取对话JSON ★新 |
 | GET | `/learning/` | learning | 学习中心 |
 | POST | `/learning/<id>/approve` | learning | 审核通过入库 |
 | POST | `/learning/<id>/modify` | learning | 修改后入库 |
@@ -413,6 +452,8 @@ Response:
 | GET | `/pdd-orders/<order_id>` | pdd_orders | 订单详情+聊天记录 |
 | GET | `/plugins/` | plugin | 插件管理列表 |
 | GET | `/plugins/tasks` | plugin | 任务执行记录 |
+| GET | `/api/health/dashboard` | api | 健康状态汇总JSON ★新 |
+| GET | `/api/health/plugin-status` | api | 各店铺插件在线状态 ★新 |
 
 ### 8.2 客户端插件API（X-Shop-Token 鉴权，无需登录）
 
@@ -429,7 +470,7 @@ Response:
 
 | 方法 | 路径 | 鉴权 | 说明 |
 |------|------|------|------|
-| POST | `/api/webhook/message` | 无（内部） | 通用消息处理（三层AI） |
+| POST | `/api/webhook/message` | 无（内部） | 通用消息处理（二层AI） |
 | POST | `/api/webhook/pdd` | shop_token（Body） | 拼多多浏览器插件推送 |
 | POST | `/api/test-message` | 登录 | 后台测试消息处理 |
 | POST | `/api/ai-assistant/chat` | 登录 | 知识库AI助手（doubao-lite） |
@@ -640,6 +681,8 @@ AI回复 → 触发检查 → 创建 LearningRecord（review_status=pending）
 
 ## 13. .env 完整配置说明
 
+> ⚠️ v2.1起，以下参数已可在后台 `/settings/` 页面可视化配置，无需手动编辑 `.env`。`.env` 仍作为首次部署初始化使用。
+
 ```env
 # ============================
 # 基础配置
@@ -757,7 +800,37 @@ git pull origin main
 
 ## 15. 版本变更日志
 
-### v2.0.0（当前版本）
+### v2.1.0（2026-03-11）
+
+#### 新增功能
+
+- ✅ **规则引擎已删除**：`rules` 表、`modules/rules_engine.py`、`routes/rules.py` 全部移除，功能由意图规则+知识库完全覆盖
+- ✅ **意图规则纯文字回复**：`action_code` 为空时，`auto_reply_tpl` 可直接回复买家（`process_by='intent_reply'`），0成本0延迟，适合FAQ类意图
+- ✅ **系统设置页面**（`/settings/`）：配置项从 `.env` 迁移到数据库 `system_configs` 表，支持可视化编辑，含豆包/MaxKB/系统行为四个分组
+- ✅ **消息对话全记录**：AI回复现在以 `direction='out'` 保存到 `messages` 表，消息管理页支持气泡对话视图，一键将AI对话加入学习记录
+- ✅ **控制台健康状态**：控制面板新增插件在线状态、MaxKB连接、豆包API状态、今日各层命中率饼图，30秒自动刷新
+- ✅ **页面帮助悬浮卡片**：每个后台页面右下角新增「❓ 帮助」按钮，点击显示该页面专属说明
+
+#### 删除/移除
+
+- ❌ **规则引擎完全删除**（`models/rule.py`、`routes/rules.py`、`modules/rules_engine.py`、相关模板）
+- ❌ 侧边栏「规则引擎」菜单项已移除
+
+#### 优化改进
+
+- 消息处理从"三层"调整为"二层"（去掉规则引擎层，知识库为第一层，豆包AI为第二层）
+- `process_by` 新增 `intent_reply` 值，统计更精确
+  - `intent_reply` — 意图规则纯文字回复（新增）
+  - `plugin` — 意图规则插件任务回复
+  - `knowledge` — 知识库命中
+  - `ai` — 豆包AI回复
+  - `human` — 转人工
+- 系统设置支持豆包/MaxKB连接测试，实时反馈配置是否有效
+- 控制台今日统计饼图新增 `intent_reply` 占比维度
+
+---
+
+### v2.0.0（2026-03-09）
 
 #### 新增功能
 
@@ -786,6 +859,76 @@ git pull origin main
 - 侧边栏新增🔌插件管理、🎯意图规则菜单
 - `process_message` 返回 `process_by='plugin'` 标识插件处理路径
 - 所有布尔查询改为 SQLAlchemy `.is_(True)` 语法
+
+---
+
+## 17. 系统设置（/settings/，v2.1新增）
+
+### 17.1 功能说明
+
+将原来散落在 `.env` 和 `config.py` 中的配置项迁移到数据库 `system_configs` 表，
+支持通过后台管理界面可视化修改，无需重启服务（部分配置热生效，AI配置需重启）。
+
+入口：管理后台侧边栏 → ⚙️ 系统设置
+
+### 17.2 配置分组
+
+| 分组 | Tab名 | 说明 |
+|------|-------|------|
+| `ai` | 🤖 AI参数 | 豆包模型名、温度、上下文轮次、超时等 |
+| `knowledge` | 📚 知识库 | MaxKB地址/Key/数据集ID/相似度阈值 |
+| `system` | ⚙️ 系统行为 | 回复延迟、数据保留天数、黑名单阈值 |
+| `security` | 🔒 安全设置 | API Key加密存储、会话超时 |
+
+### 17.3 可配置的AI参数
+
+| 配置键 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `doubao_api_key` | string | — | 火山方舟 API Key（加密存储） |
+| `doubao_lite_model` | string | doubao-lite-32k | Lite模型名（意图/多轮/知识生成） |
+| `doubao_pro_model` | string | doubao-pro-32k | Pro模型名（情绪安抚/退款决策） |
+| `doubao_vision_model` | string | doubao-vision-pro-32k | Vision模型名（图片分析） |
+| `doubao_temperature` | float | 0.3 | AI温度（0-1，越低越稳定） |
+| `doubao_max_tokens` | int | 500 | 单次回复最大Token |
+| `max_context_turns` | int | 10 | 多轮对话保留轮次 |
+| `context_timeout_minutes` | int | 30 | 会话超时分钟数 |
+
+### 17.4 可配置的知识库参数
+
+| 配置键 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `maxkb_enabled` | bool | false | 是否启用MaxKB语义检索 |
+| `maxkb_api_url` | string | — | MaxKB服务地址 |
+| `maxkb_api_key` | string | — | MaxKB API Key |
+| `maxkb_dataset_id` | string | — | MaxKB数据集ID |
+| `knowledge_similarity_threshold` | float | 0.6 | 知识库相似度阈值 |
+
+### 17.5 相关路由
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/settings/` | 系统设置首页（分Tab展示） |
+| POST | `/settings/save` | 保存配置（JSON，支持批量） |
+| POST | `/settings/test-doubao` | 测试豆包API连接 |
+| POST | `/settings/test-maxkb` | 测试MaxKB连接 |
+| GET | `/settings/api/config` | 获取当前配置（JSON，敏感项脱敏） |
+
+---
+
+## 18. 控制台健康状态卡片（v2.1新增）
+
+控制面板（`/`）新增「系统健康状态」区块，每30秒自动刷新：
+
+| 卡片 | 数据来源 | 说明 |
+|------|----------|------|
+| 🔌 插件在线状态 | `ClientPlugin.is_online()` | 各店铺插件是否在线，显示最后心跳时间 |
+| 📚 MaxKB连接 | `/settings/test-maxkb` | MaxKB服务是否可达，响应延迟 |
+| 🤖 豆包API状态 | `/settings/test-doubao` | API Key是否有效，最近调用时间 |
+| 📊 今日命中率 | `Message.process_by` | 饼图：意图回复/插件/知识库/AI/人工 各占比 |
+
+相关API：
+- `GET /api/health/dashboard` — 返回健康状态汇总JSON（30秒轮询）
+- `GET /api/health/plugin-status` — 各店铺插件在线状态
 
 ---
 
