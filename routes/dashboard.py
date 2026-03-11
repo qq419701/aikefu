@@ -58,7 +58,7 @@ def index():
             Message.shop_id.in_(shop_ids),
             Message.direction == 'in',
             Message.msg_time >= today_start,
-            Message.process_by.in_(['rule', 'knowledge', 'ai', 'ai_vision']),
+            Message.process_by.in_(['knowledge', 'ai', 'ai_vision', 'intent_reply', 'plugin']),
         ).count()
 
         # 今日需人工处理数
@@ -174,7 +174,7 @@ def health():
         total = base.count()
         intent_plugin = base.filter(Message.process_by.in_(['plugin', 'intent_reply'])).count()
         knowledge = base.filter(Message.process_by == 'knowledge').count()
-        ai = base.filter(Message.process_by.in_(['ai', 'ai_vision', 'human'])).count()
+        ai = base.filter(Message.process_by.in_(['ai', 'ai_vision'])).count()
         result['layers'] = {
             'total': total,
             'intent_plugin': intent_plugin,
