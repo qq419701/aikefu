@@ -75,9 +75,19 @@
                         </td>
                         <!-- 触发关键词 -->
                         <td>
-                            {% for kw in rule.get_keywords() %}
+                            {% set kws = rule.get_keywords() %}
+                            {% for kw in kws[:3] %}
                             <span class="badge bg-secondary me-1 mb-1">{{ kw }}</span>
                             {% endfor %}
+                            {% if kws|length > 3 %}
+                            <span class="badge bg-light text-dark border me-1 mb-1" style="cursor:pointer;"
+                                  onclick="toggleKw(this)" data-label="+{{ kws|length - 3 }}" title="点击展开/收起">+{{ kws|length - 3 }}</span>
+                            <span class="kw-extra" style="display:none;">
+                                {% for kw in kws[3:] %}
+                                <span class="badge bg-secondary me-1 mb-1">{{ kw }}</span>
+                                {% endfor %}
+                            </span>
+                            {% endif %}
                         </td>
                         <!-- 插件动作码 -->
                         <td>
@@ -152,6 +162,37 @@
     </div>
 </div>
 
+<!-- 插件动作码说明面板 -->
+{% if action_labels %}
+<div class="card border-0 shadow-sm mt-4">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center"
+         style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#actionLabelPanel">
+        <h6 class="mb-0 fw-semibold">🔌 插件动作码说明</h6>
+        <small class="text-muted">点击展开/收起</small>
+    </div>
+    <div id="actionLabelPanel" class="collapse show">
+        <div class="card-body p-0">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width:35%">动作码</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for code, label in action_labels.items() %}
+                    <tr>
+                        <td><code class="text-primary">{{ code }}</code></td>
+                        <td class="text-muted small">{{ label }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- 说明卡片 -->
 <div class="card border-0 shadow-sm mt-4">
     <div class="card-header bg-white">
@@ -194,6 +235,20 @@
 
 {% block extra_js %}
 <script>
+// 展开/收起多余关键词
+function toggleKw(btn) {
+    var extra = btn.nextElementSibling;
+    if (extra && extra.classList.contains('kw-extra')) {
+        if (extra.style.display === 'none') {
+            extra.style.display = '';
+            btn.textContent = '收起';
+        } else {
+            extra.style.display = 'none';
+            btn.textContent = btn.dataset.label;
+        }
+    }
+}
+
 // 启用/禁用切换（AJAX）
 var toggleUrlTpl = document.querySelector('[data-toggle-url-tpl]').dataset.toggleUrlTpl;
 document.querySelectorAll('.toggle-switch').forEach(function(el) {

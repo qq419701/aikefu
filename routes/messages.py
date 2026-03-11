@@ -168,7 +168,7 @@ def conversation(buyer_id):
     if shop_id and shop_id in shop_ids:
         query = query.filter_by(shop_id=shop_id)
 
-    messages = query.order_by(Message.msg_time.asc()).paginate(page=page, per_page=50)
+    messages = query.order_by(Message.msg_time.desc()).paginate(page=page, per_page=50)
 
     first_msg = Message.query.filter_by(buyer_id=buyer_id).first()
     buyer_name = first_msg.buyer_name if first_msg else buyer_id

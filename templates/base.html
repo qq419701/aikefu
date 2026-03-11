@@ -373,8 +373,6 @@ setInterval(updateRiskBadges, 60000);
 updateRiskBadges();
 </script>
 
-{% block extra_js %}{% endblock %}
-
 <!-- 页面帮助悬浮按钮（全局） -->
 <div id="page-help-btn" style="position:fixed;bottom:24px;right:24px;z-index:9999;display:none;">
   <button class="btn btn-info rounded-circle shadow-lg" onclick="togglePageHelp()" title="页面帮助"
@@ -400,5 +398,8 @@ function setPageHelp(title, html) {
   document.getElementById('page-help-content').innerHTML = html;
 }
 </script>
+
+{% block extra_js %}{% endblock %}
+
 </body>
 </html>
