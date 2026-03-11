@@ -146,3 +146,19 @@
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+setPageHelp('📚 知识库使用说明', `
+<p><strong>知识库是什么？</strong><br>存放常见问题和答案，买家问问题时先在这里查找。</p>
+<p><strong>推荐填写内容：</strong></p>
+<ul>
+  <li>游戏说明、登录密码、游戏规则</li>
+  <li>发货时间、退款政策</li>
+  <li>账号使用注意事项</li>
+</ul>
+<p><strong>MaxKB语义检索</strong>：在系统设置里开启后，用向量相似度匹配，比关键词更准。</p>
+<p class="text-muted small">💡 知识库第二优先，意图规则未命中时才查这里</p>
+`);
+</script>
+{% endblock %}

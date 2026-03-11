@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block title %}与 {{ buyer_name }} 的对话 - {{ system_name }}{% endblock %}
+{% block page_title %}对话记录{% endblock %}
+{% block page_subtitle %}与 {{ buyer_name }} 的完整对话{% endblock %}
+
+{% block content %}
+<!-- 买家信息栏 -->
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2 d-flex align-items-center justify-content-between">
+        <div>
+            <strong>{{ buyer_name }}</strong>
+            <small class="text-muted ms-2">ID: {{ buyer_id }}</small>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            {% if shops|length > 1 %}
+            <select class="form-select form-select-sm" style="width:auto;"
+                    onchange="location.href='/messages/'+encodeURIComponent('{{ buyer_id }}')+'/conversation?shop_id='+this.value">
+                <option value="">全部店铺</option>
+                {% for shop in shops %}
+                <option value="{{ shop.id }}" {% if shop.id == selected_shop %}selected{% endif %}>
+                    {{ shop.name }}
+                </option>
+                {% endfor %}
+            </select>
+            {% endif %}
+            <a href="{{ url_for('messages.index') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 返回列表
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- 对话气泡区 -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-3" style="min-height:400px;">
+        {% if messages.items %}
+        <div class="d-flex flex-column gap-3">
+            {% for msg in messages.items %}
+            {% if msg.direction == 'in' %}
+            <!-- 买家消息：左侧 -->
+            <div class="d-flex align-items-start gap-2">
+                <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center flex-shrink-0"
+                     style="width:36px;height:36px;">
+                    <i class="bi bi-person text-white"></i>
+                </div>
+                <div>
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <small class="fw-semibold">{{ msg.buyer_name or msg.buyer_id }}</small>
+                        <small class="text-muted">{{ msg.msg_time.strftime('%m-%d %H:%M:%S') if msg.msg_time else '' }}</small>
+                        {% if msg.emotion_level >= 2 %}
+                        <span class="badge bg-danger" style="font-size:0.65rem;">
+                            情绪{{ ['正常','轻微','中度','严重','危机'][msg.emotion_level] }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div class="p-2 px-3 rounded-3 bg-light" style="max-width:480px; word-break:break-all;">
+                        {% if msg.msg_type == 'image' %}
+                        <i class="bi bi-image text-info"></i> [图片消息]
+                        {% else %}
+                        {{ msg.content }}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <!-- AI/系统回复：右侧 -->
+            <div class="d-flex align-items-start gap-2 justify-content-end">
+                <div>
+                    <div class="d-flex align-items-center gap-2 mb-1 justify-content-end">
+                        <small class="text-muted">{{ msg.msg_time.strftime('%m-%d %H:%M:%S') if msg.msg_time else '' }}</small>
+                        {% if msg.process_by == 'knowledge' %}
+                        <span class="badge bg-success" style="font-size:0.65rem;">知识库</span>
+                        {% elif msg.process_by in ['ai', 'ai_vision'] %}
+                        <span class="badge bg-primary" style="font-size:0.65rem;">AI</span>
+                        {% elif msg.process_by == 'intent_reply' %}
+                        <span class="badge bg-info" style="font-size:0.65rem;">意图规则</span>
+                        {% elif msg.process_by == 'plugin' %}
+                        <span class="badge bg-warning text-dark" style="font-size:0.65rem;">插件</span>
+                        {% elif msg.process_by == 'human' %}
+                        <span class="badge bg-danger" style="font-size:0.65rem;">人工</span>
+                        {% endif %}
+                        <small class="fw-semibold">客服AI</small>
+                    </div>
+                    <div class="p-2 px-3 rounded-3 text-white" style="max-width:480px; word-break:break-all; background: linear-gradient(135deg, #0f3460, #1a1a2e);">
+                        {{ msg.content }}
+                    </div>
+                    {% if msg.process_by in ['ai', 'knowledge'] %}
+                    <div class="text-end mt-1">
+                        <button class="btn btn-xs btn-outline-success"
+                                style="font-size:0.7rem;padding:2px 8px;"
+                                onclick="addToKnowledge('{{ msg.id }}', this)"
+                                title="将此回复加入知识库">
+                            <i class="bi bi-database-add"></i> 加入知识库
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center flex-shrink-0"
+                     style="width:36px;height:36px;">
+                    <i class="bi bi-robot text-white"></i>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+
+        <!-- 分页 -->
+        {% if messages.pages > 1 %}
+        <div class="d-flex justify-content-center mt-4">
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if messages.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ messages.prev_num }}{% if selected_shop %}&shop_id={{ selected_shop }}{% endif %}">上一页</a>
+                    </li>
+                    {% endif %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ messages.page }}/{{ messages.pages }}</span>
+                    </li>
+                    {% if messages.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ messages.next_num }}{% if selected_shop %}&shop_id={{ selected_shop }}{% endif %}">下一页</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-chat-square fs-1"></i>
+            <p class="mt-2">暂无对话记录</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 加入知识库弹窗 -->
+<div class="modal fade" id="knowledgeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">加入知识库</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">问题（买家消息）</label>
+                    <textarea class="form-control" id="kb-question" rows="2"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">答案（AI回复）</label>
+                    <textarea class="form-control" id="kb-answer" rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success" onclick="confirmAddKnowledge()">确认加入</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var currentMsgId = null;
+
+function addToKnowledge(msgId, btn) {
+    currentMsgId = msgId;
+    // 找前一条买家消息作为问题
+    var row = btn.closest('.d-flex');
+    var allRows = Array.from(document.querySelectorAll('.d-flex.gap-2'));
+    var idx = allRows.indexOf(row);
+    var question = '';
+    for (var i = idx - 1; i >= 0; i--) {
+        var el = allRows[i];
+        if (!el.classList.contains('justify-content-end')) {
+            var contentEl = el.querySelector('.bg-light');
+            if (contentEl) { question = contentEl.textContent.trim(); }
+            break;
+        }
+    }
+    var answerEl = row.querySelector('[style*="linear-gradient"]');
+    var answer = answerEl ? answerEl.textContent.trim() : '';
+    document.getElementById('kb-question').value = question;
+    document.getElementById('kb-answer').value = answer;
+    var modal = new bootstrap.Modal(document.getElementById('knowledgeModal'));
+    modal.show();
+}
+
+function confirmAddKnowledge() {
+    var question = document.getElementById('kb-question').value.trim();
+    var answer = document.getElementById('kb-answer').value.trim();
+    if (!question || !answer) {
+        alert('问题和答案不能为空');
+        return;
+    }
+    fetch('/learning/api/add-from-reply', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({question: question, answer: answer, msg_id: currentMsgId})
+    })
+    .then(r => r.json())
+    .then(function(d) {
+        alert(d.message || (d.success ? '已加入知识库' : '操作失败'));
+        if (d.success) {
+            bootstrap.Modal.getInstance(document.getElementById('knowledgeModal')).hide();
+        }
+    })
+    .catch(function() { alert('请求失败'); });
+}
+
+// 自动滚动到底部
+window.onload = function() {
+    var body = document.querySelector('.card-body');
+    if (body) body.scrollTop = body.scrollHeight;
+};
+
+setPageHelp('💬 消息管理使用说明', `
+<p><strong>查看消息记录：</strong><br>这里显示所有买家的消息，以及AI的对应回复。</p>
+<p><strong>筛选功能：</strong></p>
+<ul>
+  <li>🔴 <strong>需要人工</strong>：过滤出情绪激动或AI无法回答的会话</li>
+  <li>🏪 <strong>按店铺</strong>：多店铺时按店铺筛选</li>
+</ul>
+<p><strong>查看对话</strong>：点击"对话"按钮，可以看到完整的气泡对话视图，包括AI的回复内容。</p>
+<p><strong>一键入库</strong>：在对话视图里，好的AI回复可以一键加入知识库。</p>
+`);
+</script>
+{% endblock %}

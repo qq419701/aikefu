@@ -493,5 +493,16 @@ function askAi() {
 function escapeHtml(str) {
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+setPageHelp('🎓 学习中心使用说明', `
+<p><strong>每天花5分钟审核AI回复：</strong></p>
+<ul>
+  <li>✅ <strong>确认正确</strong>：AI回答准确，一键加入知识库</li>
+  <li>✏️ <strong>修改后入库</strong>：回答有误，改正后加入知识库</li>
+  <li>❌ <strong>不入库</strong>：回答偏差太大，拒绝</li>
+</ul>
+<p>审核越多，知识库越完善，下次类似问题就不用花AI额度了。</p>
+<p><strong>AI批量生成</strong>：选择行业后，AI会主动生成该行业常见的问答，批量导入知识库。</p>
+`);
 </script>
 {% endblock %}

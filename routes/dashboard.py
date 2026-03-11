@@ -4,11 +4,12 @@
 功能说明：系统首页，显示实时监控数据和统计报表
 """
 
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, jsonify
 from flask_login import login_required, current_user
 from models import Message, Shop, Industry, DailyStats
 from models.database import get_beijing_time
 from datetime import timedelta
+import config
 
 # 创建控制面板蓝图
 dashboard_bp = Blueprint('dashboard', __name__)
@@ -57,7 +58,7 @@ def index():
             Message.shop_id.in_(shop_ids),
             Message.direction == 'in',
             Message.msg_time >= today_start,
-            Message.process_by.in_(['rule', 'knowledge', 'ai', 'ai_vision']),
+            Message.process_by.in_(['knowledge', 'ai', 'ai_vision', 'intent_reply', 'plugin']),
         ).count()
 
         # 今日需人工处理数
@@ -106,3 +107,81 @@ def index():
         week_stats=week_stats,
         now=now,
     )
+
+
+@dashboard_bp.route('/health')
+@login_required
+def health():
+    """
+    系统健康状态API（前端每30秒轮询）
+    返回各组件的连接状态和今日统计
+    """
+    now = get_beijing_time()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    result = {}
+
+    # 1. 插件在线状态
+    try:
+        from models.plugin import ClientPlugin
+        total_plugins = ClientPlugin.query.filter_by(is_active=True).count()
+        online_plugins = sum(1 for p in ClientPlugin.query.filter_by(is_active=True).all() if p.is_online())
+        result['plugin'] = {
+            'total': total_plugins,
+            'online': online_plugins,
+            'status': 'ok' if online_plugins > 0 else 'warn'
+        }
+    except Exception:
+        result['plugin'] = {'total': 0, 'online': 0, 'status': 'error'}
+
+    # 2. MaxKB连接状态
+    try:
+        from models.system_config import SystemConfig
+        maxkb_enabled = SystemConfig.get('maxkb_enabled', config.MAXKB_ENABLED)
+        if maxkb_enabled:
+            from modules.maxkb_client import MaxKBClient
+            ok = MaxKBClient().health_check()
+            result['maxkb'] = {'enabled': True, 'status': 'ok' if ok else 'error'}
+        else:
+            result['maxkb'] = {'enabled': False, 'status': 'disabled'}
+    except Exception:
+        result['maxkb'] = {'enabled': False, 'status': 'error'}
+
+    # 3. 豆包AI状态（检查API Key是否配置）
+    try:
+        from models.system_config import SystemConfig
+        api_key = SystemConfig.get('doubao_api_key', config.DOUBAO_API_KEY)
+        result['doubao'] = {
+            'configured': bool(api_key),
+            'status': 'ok' if api_key else 'warn'
+        }
+    except Exception:
+        result['doubao'] = {'configured': False, 'status': 'warn'}
+
+    # 4. 今日各层命中率
+    try:
+        if current_user.is_admin():
+            shops = Shop.query.filter_by(is_active=True).all()
+        else:
+            shops = Shop.query.filter_by(industry_id=current_user.industry_id).all()
+        shop_ids = [s.id for s in shops]
+
+        base = Message.query.filter(
+            Message.shop_id.in_(shop_ids),
+            Message.direction == 'in',
+            Message.msg_time >= today_start,
+        )
+        total = base.count()
+        intent_plugin = base.filter(Message.process_by.in_(['plugin', 'intent_reply'])).count()
+        knowledge = base.filter(Message.process_by == 'knowledge').count()
+        ai = base.filter(Message.process_by.in_(['ai', 'ai_vision'])).count()
+        result['layers'] = {
+            'total': total,
+            'intent_plugin': intent_plugin,
+            'knowledge': knowledge,
+            'ai': ai,
+        }
+    except Exception:
+        result['layers'] = {'total': 0, 'intent_plugin': 0, 'knowledge': 0, 'ai': 0}
+
+    return jsonify(result)

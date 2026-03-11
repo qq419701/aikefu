@@ -108,6 +108,10 @@
                                 <span class="badge bg-primary">AI</span>
                             {% elif msg.process_by == 'human' %}
                                 <span class="badge bg-danger">人工</span>
+                            {% elif msg.process_by == 'intent_reply' %}
+                                <span class="badge bg-info">意图回复</span>
+                            {% elif msg.process_by == 'plugin' %}
+                                <span class="badge bg-warning text-dark">插件</span>
                             {% else %}
                                 <span class="badge bg-light text-dark">-</span>
                             {% endif %}
@@ -133,6 +137,11 @@
                                 <i class="bi bi-check"></i> 完成
                             </button>
                             {% endif %}
+                            <a href="{{ url_for('messages.conversation', buyer_id=msg.buyer_id) }}"
+                               class="btn btn-xs btn-outline-primary ms-1" style="padding:2px 8px;font-size:0.75rem;"
+                               title="查看完整对话">
+                                <i class="bi bi-chat-square-text"></i> 对话
+                            </a>
                         </td>
                     </tr>
                     {% endfor %}
@@ -191,5 +200,16 @@ function markHandled(id, btn) {
             }
         });
 }
+
+setPageHelp('💬 消息管理使用说明', `
+<p><strong>查看消息记录：</strong><br>这里显示所有买家的消息，以及AI的对应回复。</p>
+<p><strong>筛选功能：</strong></p>
+<ul>
+  <li>🔴 <strong>需要人工</strong>：过滤出情绪激动或AI无法回答的会话</li>
+  <li>🏪 <strong>按店铺</strong>：多店铺时按店铺筛选</li>
+</ul>
+<p><strong>查看对话</strong>：点击"对话"按钮，可以看到完整的气泡对话视图，包括AI的回复内容。</p>
+<p><strong>一键入库</strong>：在对话视图里，好的AI回复可以一键加入知识库。</p>
+`);
 </script>
 {% endblock %}

@@ -66,10 +66,6 @@ class Industry(db.Model):
     knowledge_items = db.relationship('KnowledgeBase', backref='industry', lazy='dynamic',
                                       foreign_keys='KnowledgeBase.industry_id')
 
-    # 关联的规则
-    rules = db.relationship('Rule', backref='industry', lazy='dynamic',
-                            foreign_keys='Rule.industry_id')
-
     def to_dict(self):
         """
         转换为字典格式

@@ -224,5 +224,17 @@ document.querySelectorAll('.toggle-switch').forEach(function(el) {
         });
     });
 });
+
+setPageHelp('🧠 意图规则使用说明', `
+<p><strong>意图规则是什么？</strong><br>当买家发消息时，系统第一时间用关键词匹配意图规则。</p>
+<p><strong>两种用途：</strong></p>
+<ul>
+  <li>🔌 <strong>插件动作</strong>：选择插件动作码（如自动换号），系统自动触发客户端执行</li>
+  <li>💬 <strong>纯文字回复</strong>：不选动作码，只填"立即回复话术"，直接给买家发固定消息</li>
+</ul>
+<p><strong>游戏租号推荐配置：</strong><br>
+换号→auto_exchange，转人工→transfer_human，退款引导→refund_guide（无需插件，只填话术）</p>
+<p class="text-muted small">💡 意图规则比知识库优先，命中后直接返回，不消耗AI额度</p>
+`);
 </script>
 {% endblock %}

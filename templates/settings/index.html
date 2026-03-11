@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}系统设置 - {{ system_name }}{% endblock %}
+{% block page_title %}系统设置{% endblock %}
+{% block page_subtitle %}管理AI参数、知识库、系统行为等配置{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+    <!-- 左侧Tab导航 -->
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm">
+            <div class="list-group list-group-flush" id="settings-tab" role="tablist">
+                {% for group_key, group_info in groups.items() %}
+                <a class="list-group-item list-group-item-action {% if loop.first %}active{% endif %}"
+                   id="tab-{{ group_key }}"
+                   data-bs-toggle="list"
+                   href="#panel-{{ group_key }}"
+                   role="tab">
+                    {{ group_info.label }}
+                    <br><small class="text-muted">{{ group_info.desc }}</small>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧内容区 -->
+    <div class="col-md-9">
+        <div class="tab-content">
+            {% for group_key, group_info in groups.items() %}
+            <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="panel-{{ group_key }}" role="tabpanel">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <h6 class="mb-0 fw-semibold">{{ group_info.label }}</h6>
+                        <small class="text-muted">{{ group_info.desc }}</small>
+                    </div>
+                    <div class="card-body">
+                        {% if configs[group_key] %}
+                        <form id="form-{{ group_key }}">
+                            {% for cfg in configs[group_key] %}
+                            <div class="mb-3 row align-items-center">
+                                <label class="col-sm-4 col-form-label fw-semibold">
+                                    {{ cfg.label }}
+                                    {% if cfg.need_restart %}
+                                    <span class="badge bg-warning text-dark ms-1" title="修改后需重启">重启</span>
+                                    {% endif %}
+                                </label>
+                                <div class="col-sm-8">
+                                    {% if cfg.value_type == 'bool' %}
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input config-input" type="checkbox"
+                                               id="cfg-{{ cfg.key }}" data-key="{{ cfg.key }}"
+                                               {% if cfg.get_value() %}checked{% endif %}>
+                                        <label class="form-check-label" for="cfg-{{ cfg.key }}">
+                                            {{ '已启用' if cfg.get_value() else '已禁用' }}
+                                        </label>
+                                    </div>
+                                    {% elif cfg.value_type == 'int' %}
+                                    <input type="number" class="form-control form-control-sm config-input"
+                                           id="cfg-{{ cfg.key }}" data-key="{{ cfg.key }}"
+                                           value="{{ cfg.value or '' }}">
+                                    {% elif cfg.value_type == 'float' %}
+                                    <input type="number" step="0.01" class="form-control form-control-sm config-input"
+                                           id="cfg-{{ cfg.key }}" data-key="{{ cfg.key }}"
+                                           value="{{ cfg.value or '' }}">
+                                    {% elif cfg.is_secret %}
+                                    <input type="password" class="form-control form-control-sm config-input"
+                                           id="cfg-{{ cfg.key }}" data-key="{{ cfg.key }}"
+                                           value="{{ cfg.value or '' }}"
+                                           placeholder="（留空保持不变）">
+                                    {% else %}
+                                    <input type="text" class="form-control form-control-sm config-input"
+                                           id="cfg-{{ cfg.key }}" data-key="{{ cfg.key }}"
+                                           value="{{ cfg.value or '' }}">
+                                    {% endif %}
+                                    {% if cfg.description %}
+                                    <div class="form-text text-muted">{{ cfg.description }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+
+                            <!-- 测试按钮 -->
+                            {% if group_key == 'ai' %}
+                            <div class="mt-3 pt-3 border-top">
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="testDoubao()">
+                                    <i class="bi bi-wifi"></i> 测试豆包连接
+                                </button>
+                            </div>
+                            {% endif %}
+                            {% if group_key == 'knowledge' %}
+                            <div class="mt-3 pt-3 border-top">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="testMaxKB()">
+                                    <i class="bi bi-database-check"></i> 测试MaxKB连接
+                                </button>
+                            </div>
+                            {% endif %}
+                        </form>
+                        {% else %}
+                        <div class="text-muted text-center py-4">暂无配置项</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- 保存按钮 -->
+        <div class="mt-3 text-end">
+            <button class="btn btn-primary" onclick="saveAll()">
+                <i class="bi bi-save"></i> 保存设置
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast提示 -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:9999">
+    <div id="save-toast" class="toast align-items-center border-0" role="alert">
+        <div class="d-flex">
+            <div class="toast-body" id="toast-msg">已保存</div>
+            <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function collectData() {
+    var data = {};
+    document.querySelectorAll('.config-input').forEach(function(el) {
+        var key = el.dataset.key;
+        if (el.type === 'checkbox') {
+            data[key] = el.checked ? 'true' : 'false';
+        } else {
+            data[key] = el.value;
+        }
+    });
+    return data;
+}
+
+function showToast(msg, success) {
+    var toast = document.getElementById('save-toast');
+    toast.classList.remove('bg-success', 'bg-danger', 'text-white');
+    toast.classList.add(success ? 'bg-success' : 'bg-danger', 'text-white');
+    document.getElementById('toast-msg').textContent = msg;
+    var t = new bootstrap.Toast(toast, {delay: 3000});
+    t.show();
+}
+
+function saveAll() {
+    var data = collectData();
+    fetch('/settings/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(function(d) {
+        showToast(d.message, d.success);
+    })
+    .catch(function() {
+        showToast('保存失败，请重试', false);
+    });
+}
+
+function testDoubao() {
+    var btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '测试中...';
+    fetch('/settings/test-doubao', {method: 'POST'})
+        .then(r => r.json())
+        .then(function(d) {
+            showToast(d.message, d.success);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-wifi"></i> 测试豆包连接';
+        })
+        .catch(function() {
+            showToast('请求失败', false);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-wifi"></i> 测试豆包连接';
+        });
+}
+
+function testMaxKB() {
+    var btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '测试中...';
+    fetch('/settings/test-maxkb', {method: 'POST'})
+        .then(r => r.json())
+        .then(function(d) {
+            showToast(d.message, d.success);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-database-check"></i> 测试MaxKB连接';
+        })
+        .catch(function() {
+            showToast('请求失败', false);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-database-check"></i> 测试MaxKB连接';
+        });
+}
+
+// 页面帮助
+setPageHelp('⚙️ 系统设置使用说明', `
+<p><strong>AI参数设置：</strong><br>配置豆包API密钥和模型参数，修改后立即生效。</p>
+<p><strong>多轮对话：</strong><br>设置会话上下文保留轮次和超时时间，轮次越多AI记忆越好但越贵。</p>
+<p><strong>知识库设置：</strong><br>开启MaxKB语义检索后，知识库匹配更准确（需先部署MaxKB）。</p>
+<p><strong>系统行为：</strong><br>自动回复延迟建议设置1-3秒，模拟人工，避免平台风控。</p>
+<p class="text-warning small">⚠️ 标注"重启"的配置修改后需重启服务才能生效</p>
+`);
+</script>
+{% endblock %}

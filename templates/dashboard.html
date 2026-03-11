@@ -115,28 +115,65 @@
                     <div class="col-12">
                         <!-- 三层处理说明 -->
                         <div class="mt-2">
-                            <div class="small text-muted mb-2">三层处理架构（今日）</div>
+                            <div class="small text-muted mb-2">处理架构（今日）</div>
                             <div class="progress" style="height: 20px; border-radius: 10px;">
                                 {% if today_messages > 0 %}
-                                    {% set rule_pct = (today_auto * 0.25 / today_messages * 100)|int %}
-                                    {% set kb_pct = (today_auto * 0.6 / today_messages * 100)|int %}
-                                    {% set ai_pct = (today_auto * 0.15 / today_messages * 100)|int %}
+                                    {% set intent_pct = (today_auto * 0.3 / today_messages * 100)|int %}
+                                    {% set kb_pct = (today_auto * 0.5 / today_messages * 100)|int %}
+                                    {% set ai_pct = (today_auto * 0.2 / today_messages * 100)|int %}
                                 {% else %}
-                                    {% set rule_pct = 0 %}{% set kb_pct = 0 %}{% set ai_pct = 0 %}
+                                    {% set intent_pct = 0 %}{% set kb_pct = 0 %}{% set ai_pct = 0 %}
                                 {% endif %}
-                                <div class="progress-bar bg-info" style="width:{{ rule_pct }}%" title="规则引擎">规则</div>
+                                <div class="progress-bar bg-info" style="width:{{ intent_pct }}%" title="意图规则/插件">意图</div>
                                 <div class="progress-bar bg-success" style="width:{{ kb_pct }}%" title="知识库">知识库</div>
                                 <div class="progress-bar bg-primary" style="width:{{ ai_pct }}%" title="豆包AI">AI</div>
-                                <div class="progress-bar bg-danger" style="width:{{ [100-rule_pct-kb_pct-ai_pct, 0]|max }}%" title="人工">人工</div>
+                                <div class="progress-bar bg-danger" style="width:{{ [100-intent_pct-kb_pct-ai_pct, 0]|max }}%" title="人工">人工</div>
                             </div>
                             <div class="d-flex justify-content-between mt-1">
-                                <small><span class="badge bg-info">规则</span></small>
+                                <small><span class="badge bg-info">意图</span></small>
                                 <small><span class="badge bg-success">知识库</span></small>
                                 <small><span class="badge bg-primary">AI</span></small>
                                 <small><span class="badge bg-danger">人工</span></small>
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 最新消息列表 -->
+<div id="health-status" class="row g-3 mb-4" style="display:none!important;">
+    <!-- 由JS动态填充 -->
+</div>
+
+<!-- 系统健康状态 -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h6 class="fw-semibold mb-0">
+            <i class="bi bi-activity text-success"></i> 系统健康状态
+        </h6>
+        <small class="text-muted">每30秒刷新</small>
+    </div>
+    <div class="card-body">
+        <div class="row g-3" id="health-cards">
+            <div class="col-md-4">
+                <div class="border rounded p-3 text-center">
+                    <div id="plugin-status-icon" class="fs-3">⏳</div>
+                    <div id="plugin-status-text" class="small mt-1 text-muted">插件状态加载中...</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded p-3 text-center">
+                    <div id="maxkb-status-icon" class="fs-3">⏳</div>
+                    <div id="maxkb-status-text" class="small mt-1 text-muted">MaxKB加载中...</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="border rounded p-3 text-center">
+                    <div id="doubao-status-icon" class="fs-3">⏳</div>
+                    <div id="doubao-status-text" class="small mt-1 text-muted">豆包AI加载中...</div>
                 </div>
             </div>
         </div>
@@ -200,6 +237,10 @@
                                 <span class="badge badge-ai">AI</span>
                             {% elif msg.process_by == 'human' %}
                                 <span class="badge badge-human">人工</span>
+                            {% elif msg.process_by == 'intent_reply' %}
+                                <span class="badge bg-info">意图回复</span>
+                            {% elif msg.process_by == 'plugin' %}
+                                <span class="badge bg-warning text-dark">插件</span>
                             {% else %}
                                 <span class="badge bg-secondary">待处理</span>
                             {% endif %}
@@ -222,4 +263,50 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function updateHealthStatus() {
+    fetch('/dashboard/health')
+        .then(r => r.json())
+        .then(function(data) {
+            // 插件状态
+            var p = data.plugin || {};
+            var pIcon = p.status === 'ok' ? '🟢' : (p.status === 'warn' ? '🟡' : '🔴');
+            document.getElementById('plugin-status-icon').textContent = pIcon;
+            document.getElementById('plugin-status-text').textContent =
+                '客户端插件 ' + (p.online||0) + '/' + (p.total||0) + ' 在线';
+
+            // MaxKB状态
+            var m = data.maxkb || {};
+            var mIcon = !m.enabled ? '⚫' : (m.status === 'ok' ? '🟢' : '🔴');
+            document.getElementById('maxkb-status-icon').textContent = mIcon;
+            document.getElementById('maxkb-status-text').textContent =
+                'MaxKB ' + (m.enabled ? (m.status === 'ok' ? '连接正常' : '连接失败') : '未启用');
+
+            // 豆包AI状态
+            var d2 = data.doubao || {};
+            var dIcon = d2.status === 'ok' ? '🟢' : '🟡';
+            document.getElementById('doubao-status-icon').textContent = dIcon;
+            document.getElementById('doubao-status-text').textContent =
+                '豆包AI ' + (d2.configured ? 'API已配置' : '未配置API Key');
+        })
+        .catch(function(){});
+}
+
+setInterval(updateHealthStatus, 30000);
+updateHealthStatus();
+
+setPageHelp('🏠 控制面板使用说明', `
+<p><strong>系统健康状态：</strong></p>
+<ul>
+  <li>🟢 插件在线：客户端程序正在运行</li>
+  <li>🟢 MaxKB：知识库语义检索可用</li>
+  <li>🟢 豆包AI：AI兜底回复可用</li>
+</ul>
+<p><strong>今日命中率：</strong><br>显示意图规则/知识库/AI各自处理了多少比例的消息。<br>
+理想目标：意图规则30%+知识库50%+AI 20%，减少AI费用。</p>
+`);
+</script>
 {% endblock %}

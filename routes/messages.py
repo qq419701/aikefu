@@ -125,7 +125,7 @@ def api_stats():
         Message.shop_id.in_(shop_ids),
         Message.direction == 'in',
         Message.msg_time >= today_start,
-        Message.process_by.in_(['rule', 'knowledge', 'ai', 'ai_vision']),
+        Message.process_by.in_(['knowledge', 'ai', 'ai_vision', 'intent_reply', 'plugin']),
     ).count()
 
     pending = Message.query.filter(
@@ -143,3 +143,40 @@ def api_stats():
         'rate': rate,
         'pending': pending,
     })
+
+
+@messages_bp.route('/<buyer_id>/conversation')
+@login_required
+def conversation(buyer_id):
+    """
+    查看与某买家的完整对话（气泡视图）
+    功能：按时间顺序显示买家消息（in）和AI回复（out）
+    """
+    shop_id = request.args.get('shop_id', type=int)
+    page = request.args.get('page', 1, type=int)
+
+    if current_user.is_admin():
+        shops = Shop.query.filter_by(is_active=True).all()
+    else:
+        shops = Shop.query.filter_by(industry_id=current_user.industry_id).all()
+    shop_ids = [s.id for s in shops]
+
+    query = Message.query.filter(
+        Message.shop_id.in_(shop_ids),
+        Message.buyer_id == buyer_id,
+    )
+    if shop_id and shop_id in shop_ids:
+        query = query.filter_by(shop_id=shop_id)
+
+    messages = query.order_by(Message.msg_time.asc()).paginate(page=page, per_page=50)
+
+    first_msg = Message.query.filter_by(buyer_id=buyer_id).first()
+    buyer_name = first_msg.buyer_name if first_msg else buyer_id
+
+    return render_template('messages/conversation.html',
+        messages=messages,
+        buyer_id=buyer_id,
+        buyer_name=buyer_name,
+        shops=shops,
+        selected_shop=shop_id,
+    )

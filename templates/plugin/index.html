@@ -142,3 +142,19 @@ Body: {"result": {"success": true}}</code></pre>
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+setPageHelp('🔌 插件管理使用说明', `
+<p><strong>插件是什么？</strong><br>客户端（dskehuduan）连上服务器后，会在这里注册为插件。</p>
+<p><strong>插件状态：</strong></p>
+<ul>
+  <li>🟢 在线：客户端正在运行，可以执行自动换号等操作</li>
+  <li>🔴 离线：客户端已关闭，自动操作将跳过</li>
+</ul>
+<p><strong>支持的动作码：</strong><br>
+auto_exchange（自动换号）、transfer_human（转人工）、handle_refund（退款处理）</p>
+<p class="text-muted small">💡 意图规则里配置的动作码，需要对应的插件在线才能执行</p>
+`);
+</script>
+{% endblock %}

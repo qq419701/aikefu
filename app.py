@@ -61,7 +61,6 @@ def create_app():
     from routes.industry import industry_bp
     from routes.shop import shop_bp
     from routes.knowledge import knowledge_bp
-    from routes.rules import rules_bp
     from routes.messages import messages_bp
     from routes.blacklist import blacklist_bp
     from routes.stats import stats_bp
@@ -72,13 +71,13 @@ def create_app():
     from routes.plugin import plugin_bp, plugin_api_bp
     from routes.intent_rule import intent_rule_bp
     from routes.client_auth import client_auth_bp
+    from routes.settings import settings_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(industry_bp, url_prefix='/industry')
     app.register_blueprint(shop_bp, url_prefix='/shop')
     app.register_blueprint(knowledge_bp, url_prefix='/knowledge')
-    app.register_blueprint(rules_bp, url_prefix='/rules')
     app.register_blueprint(messages_bp, url_prefix='/messages')
     app.register_blueprint(blacklist_bp, url_prefix='/blacklist')
     app.register_blueprint(stats_bp, url_prefix='/stats')
@@ -94,6 +93,8 @@ def create_app():
     app.register_blueprint(intent_rule_bp, url_prefix='/intent-rules')
     # 客户端账号认证：路径为 /api/client/login、/api/client/shops 等
     app.register_blueprint(client_auth_bp, url_prefix='/api/client')
+    # 系统设置：路径为 /settings/
+    app.register_blueprint(settings_bp, url_prefix='/settings')
 
     # ---- 启动定时任务调度器 ----
     from modules.scheduler import TaskScheduler
