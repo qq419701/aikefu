@@ -14,13 +14,27 @@
         body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
         .sidebar {
             width: 240px;
-            min-height: 100vh;
+            height: 100vh;
             background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
             position: fixed;
             top: 0;
             left: 0;
             z-index: 100;
             overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.4);
         }
         .sidebar .nav-link {
             color: rgba(255,255,255,0.75);
@@ -140,13 +154,6 @@
                     <span id="learning-badge" class="badge bg-warning text-dark ms-auto" style="display:none"></span>
                 </a>
             </li>
-            <li class="nav-item ms-3">
-                <a class="nav-link {% if request.endpoint == 'learning.history' %}active{% endif %}"
-                   href="{{ url_for('learning.history') }}" style="font-size:0.85rem;">
-                    <i class="bi bi-clock-history"></i>审核历史
-                </a>
-            </li>
-
             <!-- 插件管理 -->
             <li class="nav-item">
                 <a class="nav-link {% if request.blueprint == 'plugin' %}active{% endif %}"
@@ -192,18 +199,6 @@
                 <a class="nav-link {% if request.blueprint == 'knowledge' %}active{% endif %}"
                    href="{{ url_for('knowledge.index') }}">
                     <i class="bi bi-book"></i>知识库
-                </a>
-            </li>
-            <li class="nav-item ms-3">
-                <a class="nav-link {% if request.endpoint == 'knowledge.generate' %}active{% endif %}"
-                   href="{{ url_for('knowledge.generate') }}" style="font-size:0.85rem;">
-                    <i class="bi bi-robot"></i>AI批量生成
-                </a>
-            </li>
-            <li class="nav-item ms-3">
-                <a class="nav-link {% if request.endpoint == 'knowledge.stats' %}active{% endif %}"
-                   href="{{ url_for('knowledge.stats') }}" style="font-size:0.85rem;">
-                    <i class="bi bi-graph-up-arrow"></i>健康仪表盘
                 </a>
             </li>
             
