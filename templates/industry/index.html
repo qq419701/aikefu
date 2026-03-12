@@ -64,6 +64,15 @@
                     {% if industry.emotion_enabled %}
                         <span class="badge bg-warning-subtle text-warning border border-warning-subtle">情绪识别</span>
                     {% endif %}
+                    {% if industry.maxkb_dataset_id %}
+                        <span class="badge bg-info-subtle text-info border border-info-subtle" title="已配置MaxKB数据集">
+                            <i class="bi bi-robot"></i> MaxKB✅
+                        </span>
+                    {% else %}
+                        <span class="badge bg-light text-muted border" title="未配置行业专属数据集，使用全局默认">
+                            <i class="bi bi-robot"></i> MaxKB默认
+                        </span>
+                    {% endif %}
                 </div>
             </div>
             

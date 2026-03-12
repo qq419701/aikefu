@@ -69,6 +69,7 @@ def add():
             icon=icon,
             platform=platform,
             ai_system_prompt=ai_system_prompt,
+            maxkb_dataset_id=request.form.get('maxkb_dataset_id', '').strip(),
             auto_reply_enabled=True,
             is_active=True,
             created_at=get_beijing_time(),
@@ -106,6 +107,7 @@ def edit(industry_id):
         industry.auto_reply_enabled = 'auto_reply_enabled' in request.form
         industry.vision_enabled = 'vision_enabled' in request.form
         industry.emotion_enabled = 'emotion_enabled' in request.form
+        industry.maxkb_dataset_id = request.form.get('maxkb_dataset_id', '').strip()
         industry.updated_at = get_beijing_time()
 
         db.session.commit()
@@ -158,3 +160,49 @@ def delete(industry_id):
 
     flash(f'行业「{industry.name}」已删除', 'success')
     return redirect(url_for('industry.index'))
+
+
+@industry_bp.route('/<int:industry_id>/sync-maxkb', methods=['POST'])
+@login_required
+def sync_maxkb(industry_id):
+    """
+    单行业全量同步到MaxKB
+    功能：将指定行业的知识库全量推送到其专属（或全局默认）MaxKB数据集
+    """
+    if not current_user.is_admin() and not current_user.can_manage_industry(industry_id):
+        return jsonify({'success': False, 'message': '无权限'}), 403
+
+    try:
+        from modules.maxkb_client import MaxKBClient
+        from models.knowledge import KnowledgeBase
+        from models.database import get_beijing_time as _now
+
+        client = MaxKBClient.for_industry(industry_id)
+        if not client.enabled:
+            return jsonify({'success': False, 'message': 'MaxKB未启用，请先在系统设置中启用'})
+
+        items = KnowledgeBase.query.filter_by(industry_id=industry_id, is_active=True).all()
+        total = len(items)
+        synced = 0
+        failed = 0
+        now = _now()
+
+        for item in items:
+            ok = client.upsert(item.id, item.question, item.answer, item.keywords or '')
+            if ok:
+                item.maxkb_synced = True
+                item.maxkb_synced_at = now
+                synced += 1
+            else:
+                failed += 1
+
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': f'同步完成：成功{synced}条，失败{failed}条，共{total}条',
+            'synced': synced,
+            'failed': failed,
+            'total': total,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'同步失败：{str(e)[:200]}'})

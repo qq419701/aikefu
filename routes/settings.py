@@ -101,25 +101,27 @@ def maxkb_panel():
         return redirect(url_for('settings.index'))
 
     from models.knowledge import KnowledgeBase
-    import config as cfg
 
-    maxkb_stats = {'connected': False, 'total_docs': 0, 'dataset_id': cfg.MAXKB_DATASET_ID}
-    if cfg.MAXKB_ENABLED:
-        try:
-            from modules.maxkb_client import MaxKBClient
-            maxkb_stats = MaxKBClient().get_stats()
-        except Exception:
-            pass
+    maxkb_stats = {'connected': False, 'total_docs': 0, 'dataset_id': ''}
+    try:
+        from modules.maxkb_client import MaxKBClient
+        client = MaxKBClient()
+        if client.enabled:
+            maxkb_stats = client.get_stats()
+        else:
+            maxkb_stats['dataset_id'] = client.dataset_id
+    except Exception:
+        pass
 
     local_total = KnowledgeBase.query.count()
     local_synced = KnowledgeBase.query.filter_by(maxkb_synced=True).count()
 
-    # 按行业统计本地条目数
+    # 按行业统计本地条目数，同时包含行业的maxkb_dataset_id配置
     from models.industry import Industry
     from models.database import db
     from sqlalchemy import func
     industry_stats = db.session.query(
-        Industry.id, Industry.name, Industry.icon,
+        Industry.id, Industry.name, Industry.icon, Industry.maxkb_dataset_id,
         func.count(KnowledgeBase.id).label('total'),
         func.sum(db.case((KnowledgeBase.maxkb_synced == True, 1), else_=0)).label('synced'),
     ).outerjoin(KnowledgeBase, KnowledgeBase.industry_id == Industry.id
@@ -130,28 +132,91 @@ def maxkb_panel():
         local_total=local_total,
         local_synced=local_synced,
         industry_stats=industry_stats,
-        maxkb_enabled=cfg.MAXKB_ENABLED,
+        maxkb_enabled=maxkb_stats.get('connected', False) or (maxkb_stats.get('dataset_id', '') != ''),
     )
 
 
 @settings_bp.route('/maxkb/sync-all', methods=['POST'])
 @login_required
 def maxkb_sync_all():
-    """一键全量同步：将所有本地知识库推送到MaxKB"""
+    """一键全量同步：将所有本地知识库按行业推送到对应MaxKB数据集"""
     if not current_user.is_admin():
         return jsonify({'success': False, 'message': '无权限'}), 403
 
-    import config as cfg
-    if not cfg.MAXKB_ENABLED:
-        return jsonify({'success': False, 'message': 'MaxKB未启用，请先在系统设置中启用'})
+    try:
+        from models.knowledge import KnowledgeBase
+        from models.industry import Industry
+        from modules.maxkb_client import MaxKBClient
+        from models.database import db, get_beijing_time
+
+        # 先检查MaxKB是否启用
+        global_client = MaxKBClient()
+        if not global_client.enabled:
+            return jsonify({'success': False, 'message': 'MaxKB未启用，请先在系统设置中启用'})
+
+        industries = Industry.query.filter_by(is_active=True).all()
+        total = 0
+        synced = 0
+        failed = 0
+        now = get_beijing_time()
+
+        for industry in industries:
+            client = MaxKBClient.for_industry(industry.id)
+            items = KnowledgeBase.query.filter_by(industry_id=industry.id, is_active=True).all()
+            total += len(items)
+            for item in items:
+                ok = client.upsert(item.id, item.question, item.answer, item.keywords or '')
+                if ok:
+                    item.maxkb_synced = True
+                    item.maxkb_synced_at = now
+                    synced += 1
+                else:
+                    failed += 1
+
+        # 同步无行业归属的条目到全局默认数据集
+        orphan_items = KnowledgeBase.query.filter(
+            KnowledgeBase.is_active == True,
+            KnowledgeBase.industry_id.is_(None)
+        ).all()
+        total += len(orphan_items)
+        for item in orphan_items:
+            ok = global_client.upsert(item.id, item.question, item.answer, item.keywords or '')
+            if ok:
+                item.maxkb_synced = True
+                item.maxkb_synced_at = now
+                synced += 1
+            else:
+                failed += 1
+
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': f'全量同步完成：成功{synced}条，失败{failed}条',
+            'synced': synced,
+            'failed': failed,
+            'total': total,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'同步失败：{str(e)[:200]}'})
+
+
+@settings_bp.route('/maxkb/sync-industry/<int:industry_id>', methods=['POST'])
+@login_required
+def maxkb_sync_industry(industry_id):
+    """单行业同步：将指定行业的知识库同步到其MaxKB数据集"""
+    if not current_user.is_admin():
+        return jsonify({'success': False, 'message': '无权限'}), 403
 
     try:
         from models.knowledge import KnowledgeBase
         from modules.maxkb_client import MaxKBClient
         from models.database import db, get_beijing_time
 
-        client = MaxKBClient()
-        items = KnowledgeBase.query.filter_by(is_active=True).all()
+        client = MaxKBClient.for_industry(industry_id)
+        if not client.enabled:
+            return jsonify({'success': False, 'message': 'MaxKB未启用，请先在系统设置中启用'})
+
+        items = KnowledgeBase.query.filter_by(industry_id=industry_id, is_active=True).all()
         total = len(items)
         synced = 0
         failed = 0
@@ -169,7 +234,7 @@ def maxkb_sync_all():
         db.session.commit()
         return jsonify({
             'success': True,
-            'message': f'全量同步完成：成功{synced}条，失败{failed}条',
+            'message': f'同步完成：成功{synced}条，失败{failed}条，共{total}条',
             'synced': synced,
             'failed': failed,
             'total': total,

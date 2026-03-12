@@ -77,6 +77,16 @@ def init_db(app):
         # 创建所有数据表
         db.create_all()
 
+        # 自动迁移：添加 industries.maxkb_dataset_id 字段（兼容旧数据库）
+        try:
+            from sqlalchemy import text
+            db.session.execute(
+                text("ALTER TABLE industries ADD COLUMN maxkb_dataset_id VARCHAR(200) DEFAULT ''")
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()  # 字段已存在则忽略
+
         # 插入初始数据（行业分类、管理员账号等）
         _insert_default_data(app)
         # 初始化系统配置默认值
@@ -141,7 +151,7 @@ def _init_system_configs(app):
         dict(key='maxkb_enabled',         label='启用MaxKB语义检索', group='knowledge', value_type='bool',   description='true=使用MaxKB向量检索（命中率更高），false=关键词相似度', value='false'),
         dict(key='maxkb_api_url',         label='MaxKB服务地址',     group='knowledge', value_type='string', description='MaxKB的HTTP地址，如 http://localhost:8080', value='http://localhost:8080'),
         dict(key='maxkb_api_key',         label='MaxKB API Key',     group='knowledge', value_type='string', is_secret=True, description='MaxKB后台生成的API密钥', value=''),
-        dict(key='maxkb_dataset_id',      label='MaxKB数据集ID',     group='knowledge', value_type='string', description='MaxKB后台创建数据集后获取的ID', value=''),
+        dict(key='maxkb_dataset_id',      label='MaxKB数据集ID',     group='knowledge', value_type='string', description='全局默认数据集ID，当行业未单独配置MaxKB数据集时使用。建议在行业管理页面为每个行业单独配置。', value=''),
         dict(key='knowledge_similarity',  label='知识库相似度阈值',   group='knowledge', value_type='float',  description='0.0-1.0，超过此值才认为匹配，越高越精准但漏匹配越多', value='0.6'),
         dict(key='maxkb_min_similarity',  label='MaxKB最低相似度',   group='knowledge', value_type='float',  description='MaxKB检索时低于此分数不返回结果', value='0.6'),
         # ---- 学习中心配置（v3.0新增）----
