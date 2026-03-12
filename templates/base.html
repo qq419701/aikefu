@@ -140,6 +140,12 @@
                     <span id="learning-badge" class="badge bg-warning text-dark ms-auto" style="display:none"></span>
                 </a>
             </li>
+            <li class="nav-item ms-3">
+                <a class="nav-link {% if request.endpoint == 'learning.history' %}active{% endif %}"
+                   href="{{ url_for('learning.history') }}" style="font-size:0.85rem;">
+                    <i class="bi bi-clock-history"></i>审核历史
+                </a>
+            </li>
 
             <!-- 插件管理 -->
             <li class="nav-item">
@@ -194,6 +200,12 @@
                     <i class="bi bi-robot"></i>AI批量生成
                 </a>
             </li>
+            <li class="nav-item ms-3">
+                <a class="nav-link {% if request.endpoint == 'knowledge.stats' %}active{% endif %}"
+                   href="{{ url_for('knowledge.stats') }}" style="font-size:0.85rem;">
+                    <i class="bi bi-graph-up-arrow"></i>健康仪表盘
+                </a>
+            </li>
             
             <li class="nav-item">
                 <a class="nav-link {% if request.blueprint == 'blacklist' %}active{% endif %}"
@@ -225,6 +237,12 @@
                 <a class="nav-link {% if request.blueprint == 'settings' %}active{% endif %}"
                    href="/settings/">
                     <i class="bi bi-gear"></i> 系统设置
+                </a>
+            </li>
+            <li class="nav-item ms-3">
+                <a class="nav-link {% if request.endpoint == 'settings.maxkb_panel' %}active{% endif %}"
+                   href="{{ url_for('settings.maxkb_panel') }}" style="font-size:0.85rem;">
+                    <i class="bi bi-robot"></i>MaxKB管理
                 </a>
             </li>
             {% endif %}
