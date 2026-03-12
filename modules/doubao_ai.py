@@ -27,18 +27,27 @@ class DoubaoAI:
     """
 
     def __init__(self):
-        """初始化豆包AI模块，读取所有模型配置"""
+        """初始化豆包AI模块，读取API基础配置"""
         self.api_base = config.DOUBAO_API_BASE
-        self.api_key = config.DOUBAO_API_KEY
-
-        # 各场景对应模型（按需求配置）
-        self.lite_model = config.DOUBAO_LITE_MODEL      # 意图识别/FAQ/多轮对话/知识生成
-        self.pro_model = config.DOUBAO_PRO_MODEL        # 退款/换号决策、情绪安抚
-        self.vision_model = config.DOUBAO_VISION_MODEL  # 图片分析
-
         self.timeout = config.DOUBAO_TIMEOUT
-        self.max_tokens = config.DOUBAO_MAX_TOKENS
-        self.temperature = config.DOUBAO_TEMPERATURE
+        # vision模型保持固定（后台暂无配置项）
+        self.vision_model = config.DOUBAO_VISION_MODEL
+        # 注意：lite_model/pro_model/max_tokens/temperature/api_key
+        # 改为每次调用时通过 _get_dynamic_config() 从数据库读取，支持后台热更新
+
+    def _get_dynamic_config(self):
+        """动态读取可热更新的AI配置（每次调用时从数据库读取）"""
+        try:
+            from models.system_config import SystemConfig
+            lite_model = SystemConfig.get('doubao_lite_model') or config.DOUBAO_LITE_MODEL
+            pro_model = SystemConfig.get('doubao_pro_model') or config.DOUBAO_PRO_MODEL
+            max_tokens = int(SystemConfig.get('doubao_max_tokens') or config.DOUBAO_MAX_TOKENS)
+            temperature = float(SystemConfig.get('doubao_temperature') or config.DOUBAO_TEMPERATURE)
+            api_key = SystemConfig.get('doubao_api_key') or config.DOUBAO_API_KEY
+            return lite_model, pro_model, max_tokens, temperature, api_key
+        except Exception:
+            return (config.DOUBAO_LITE_MODEL, config.DOUBAO_PRO_MODEL,
+                    config.DOUBAO_MAX_TOKENS, config.DOUBAO_TEMPERATURE, config.DOUBAO_API_KEY)
 
     # ----------------------------------------------------------------
     # 缓存归一化规则（类级别常量，便于维护和扩展）
@@ -80,7 +89,8 @@ class DoubaoAI:
             "login（登录问题）、other（其他）\n"
             "只返回JSON，不要其他内容。"
         )
-        result = self._call_api(message, system_prompt, model=self.lite_model,
+        lite_model, _pro, _mt, _temp, _key = self._get_dynamic_config()
+        result = self._call_api(message, system_prompt, model=lite_model,
                                 max_tokens=100, temperature=0.1)
         if result['success']:
             try:
@@ -126,8 +136,11 @@ class DoubaoAI:
                     'success': True,
                 }
 
-        # 2. API未配置时返回默认回复
-        if not self.api_key:
+        # 2. 动态读取配置
+        lite_model, _pro, _mt, _temp, api_key = self._get_dynamic_config()
+
+        # 3. API未配置时返回默认回复
+        if not api_key:
             return {
                 'reply': '您好，我是AI客服，稍后将由人工客服为您服务，请稍候。',
                 'from_cache': False,
@@ -136,11 +149,11 @@ class DoubaoAI:
                 'error': 'API未配置',
             }
 
-        # 3. 调用豆包lite模型（FAQ/多轮对话）
+        # 4. 调用豆包lite模型（FAQ/多轮对话）
         try:
             result = self._call_api_with_context(
                 message, system_prompt, context or [],
-                model=self.lite_model
+                model=lite_model
             )
             if result['success'] and use_cache and not context:
                 self._save_cache(message, result['reply'], industry_id)
@@ -165,7 +178,8 @@ class DoubaoAI:
             system_prompt - 系统提示词
         返回：{'reply': '回复语', 'decision': 'approve/reject/human', 'reason': '原因', 'tokens': token数}
         """
-        if not self.api_key:
+        _lite, pro_model, _mt, _temp, api_key = self._get_dynamic_config()
+        if not api_key:
             return {
                 'reply': '您的退款申请已收到，我们将尽快处理。',
                 'decision': 'human',
@@ -185,7 +199,7 @@ class DoubaoAI:
         )
         try:
             result = self._call_api(message, decision_prompt,
-                                    model=self.pro_model, max_tokens=300)
+                                    model=pro_model, max_tokens=300)
             if result['success']:
                 text = result['reply'].strip()
                 start = text.find('{')
@@ -227,7 +241,8 @@ class DoubaoAI:
             "请用温暖、专业的语气安抚买家，承认问题，表达歉意，给出解决方案。\n"
             "回复要简短（不超过100字），诚恳，不要使用模板化套话。"
         )
-        if not self.api_key:
+        _lite, pro_model, _mt, _temp, api_key = self._get_dynamic_config()
+        if not api_key:
             defaults = {
                 2: '非常抱歉给您带来了不便，我们会尽快为您妥善处理。',
                 3: '深表抱歉！您的问题我已标记为紧急处理，马上安排专属客服跟进。',
@@ -236,7 +251,7 @@ class DoubaoAI:
             return {'reply': defaults.get(emotion_level, '抱歉，请稍候。'), 'success': False}
 
         try:
-            result = self._call_api(message, prompt, model=self.pro_model)
+            result = self._call_api(message, prompt, model=pro_model)
             return {
                 'reply': result['reply'],
                 'success': result['success'],
@@ -269,13 +284,14 @@ class DoubaoAI:
             "login（登录问题）、payment（付款问题）\n"
             "只返回JSON数组，不要其他内容。"
         )
-        if not self.api_key:
+        lite_model, _pro, _mt, _temp, api_key = self._get_dynamic_config()
+        if not api_key:
             return {'items': [], 'success': False, 'error': 'API未配置', 'tokens': 0}
 
         try:
             result = self._call_api(
                 f"请为{industry_name}生成{topic}相关的{count}条问答", prompt,
-                model=self.lite_model,
+                model=lite_model,
                 max_tokens=config.DOUBAO_KB_MAX_TOKENS
             )
             if result['success']:
@@ -303,7 +319,8 @@ class DoubaoAI:
             system_prompt - 系统提示词
         返回：{'reply': '分析结果', 'success': True/False}
         """
-        if not self.api_key:
+        _lite, _pro, max_tokens, _temp, api_key = self._get_dynamic_config()
+        if not api_key:
             return {
                 'reply': '收到您的截图，我会尽快处理，请稍等。',
                 'success': False,
@@ -312,7 +329,7 @@ class DoubaoAI:
 
         try:
             headers = {
-                'Authorization': f'Bearer {self.api_key}',
+                'Authorization': f'Bearer {api_key}',
                 'Content-Type': 'application/json',
             }
 
@@ -338,7 +355,7 @@ class DoubaoAI:
                         ],
                     }
                 ],
-                'max_tokens': self.max_tokens,
+                'max_tokens': max_tokens,
             }
 
             response = requests.post(
@@ -379,14 +396,15 @@ class DoubaoAI:
             "当被问及某个行业可能出现的问题时，请详细列举常见问题和建议回答话术。\n"
             "回复要条理清晰，适合直接用作客服回复模板。"
         )
-        if not self.api_key:
+        lite_model, _pro, _mt, _temp, api_key = self._get_dynamic_config()
+        if not api_key:
             return {
                 'reply': 'AI助手暂未配置，请先在系统设置中填入豆包API密钥。',
                 'success': False,
                 'tokens': 0,
             }
         try:
-            result = self._call_api(question, system_prompt, model=self.lite_model,
+            result = self._call_api(question, system_prompt, model=lite_model,
                                     max_tokens=1000)
             return {
                 'reply': result['reply'],
@@ -414,12 +432,13 @@ class DoubaoAI:
             temperature - 温度参数
         返回：{'reply': 回复内容, 'tokens': token消耗, 'success': 是否成功}
         """
-        model = model or self.lite_model
-        max_tokens = max_tokens or self.max_tokens
-        temperature = temperature if temperature is not None else self.temperature
+        lite_model, _pro, dyn_max_tokens, dyn_temperature, api_key = self._get_dynamic_config()
+        model = model or lite_model
+        max_tokens = max_tokens or dyn_max_tokens
+        temperature = temperature if temperature is not None else dyn_temperature
 
         headers = {
-            'Authorization': f'Bearer {self.api_key}',
+            'Authorization': f'Bearer {api_key}',
             'Content-Type': 'application/json',
         }
         payload = {
@@ -465,9 +484,10 @@ class DoubaoAI:
             model - 使用的模型
         返回：{'reply': 回复内容, 'tokens': token消耗, 'success': 是否成功}
         """
-        model = model or self.lite_model
+        lite_model, _pro, dyn_max_tokens, dyn_temperature, api_key = self._get_dynamic_config()
+        model = model or lite_model
         headers = {
-            'Authorization': f'Bearer {self.api_key}',
+            'Authorization': f'Bearer {api_key}',
             'Content-Type': 'application/json',
         }
 
@@ -479,8 +499,8 @@ class DoubaoAI:
         payload = {
             'model': model,
             'messages': messages,
-            'max_tokens': self.max_tokens,
-            'temperature': self.temperature,
+            'max_tokens': dyn_max_tokens,
+            'temperature': dyn_temperature,
         }
 
         response = requests.post(

@@ -41,6 +41,13 @@ class KnowledgeEngine:
             匹配成功：{'reply': '答案内容', 'knowledge_id': 知识库ID, 'similarity': 相似度}
             匹配失败：None
         """
+        # 动态读取相似度阈值（支持后台热更新）
+        try:
+            from models.system_config import SystemConfig
+            threshold = float(SystemConfig.get('knowledge_similarity') or self.similarity_threshold)
+        except Exception:
+            threshold = self.similarity_threshold
+
         # 优先使用MaxKB语义检索（命中率更高）
         if config.MAXKB_ENABLED:
             from .maxkb_client import MaxKBClient
@@ -81,8 +88,8 @@ class KnowledgeEngine:
                 best_score = score
                 best_match = item
 
-        # 检查是否超过相似度阈值
-        if best_match and best_score >= self.similarity_threshold:
+        # 检查是否超过相似度阈值（使用动态阈值）
+        if best_match and best_score >= threshold:
             # 记录命中次数
             best_match.hit_count = (best_match.hit_count or 0) + 1
             db.session.commit()

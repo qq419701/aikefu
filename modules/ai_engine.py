@@ -46,9 +46,7 @@ class AIEngine:
     def __init__(self):
         """初始化二层引擎、情绪识别器"""
         from .context_store import ContextStore
-        self.knowledge_engine = KnowledgeEngine(
-            similarity_threshold=config.KNOWLEDGE_SIMILARITY_THRESHOLD
-        )
+        self.knowledge_engine = KnowledgeEngine()
         self.doubao_ai = DoubaoAI()
         self.emotion_detector = EmotionDetector()
         self.context_store = ContextStore()
@@ -96,15 +94,23 @@ class AIEngine:
         # 2. 情绪识别（本地关键词规则，无成本）
         emotion = self.emotion_detector.detect(message)
         emotion_level = emotion['level']
-        needs_human = emotion['needs_human'] or is_blacklisted
+        try:
+            from models.system_config import SystemConfig
+            human_level = int(SystemConfig.get('human_intervention_level') or config.HUMAN_INTERVENTION_LEVEL)
+        except Exception:
+            human_level = config.HUMAN_INTERVENTION_LEVEL
+        needs_human = emotion_level >= human_level or is_blacklisted
 
         # 3. 意图识别：先本地规则（从数据库读取，可热更新），未命中再调豆包（有成本）
         intent, action_code = self._recognize_intent_local(message, industry_id)
-        if intent == 'other' and config.DOUBAO_API_KEY:
-            # 本地未命中，调用豆包lite识别（有成本）
-            intent_result = self.doubao_ai.recognize_intent(message)
-            intent = intent_result.get('intent', 'other')
-            action_code = None  # 豆包意图识别不关联插件动作码
+        if intent == 'other':
+            from models.system_config import SystemConfig
+            _doubao_api_key = SystemConfig.get('doubao_api_key', '') or config.DOUBAO_API_KEY
+            if _doubao_api_key:
+                # 本地未命中，调用豆包lite识别（有成本）
+                intent_result = self.doubao_ai.recognize_intent(message)
+                intent = intent_result.get('intent', 'other')
+                action_code = None  # 豆包意图识别不关联插件动作码
 
         # 4. 初始化消息记录
         msg_record = self._save_incoming_message(
@@ -122,7 +128,9 @@ class AIEngine:
 
         # 5. 情绪严重 → 使用doubao-pro安抚后转人工
         if needs_human:
-            if emotion_level >= 2 and config.DOUBAO_API_KEY:
+            from models.system_config import SystemConfig
+            _doubao_api_key = SystemConfig.get('doubao_api_key', '') or config.DOUBAO_API_KEY
+            if emotion_level >= 2 and _doubao_api_key:
                 # 使用doubao-pro生成高质量安抚回复
                 soothe_result = self.doubao_ai.soothe_emotion(
                     message, emotion_level, shop.get_effective_prompt()
@@ -197,7 +205,9 @@ class AIEngine:
 
         # 6. 退款意图 → 直接走退款决策流程（doubao-pro）
         # 说明：只有在没有插件接管退款时才走此流程
-        if intent == 'refund' and not action_code and config.DOUBAO_API_KEY:
+        from models.system_config import SystemConfig
+        _refund_api_key = SystemConfig.get('doubao_api_key', '') or config.DOUBAO_API_KEY
+        if intent == 'refund' and not action_code and _refund_api_key:
             # 优先从PddOrder表查询真实订单数据，提升退款决策质量
             order_info = self._get_order_info_string(shop_id, order_id)
             refund_result = self.doubao_ai.handle_refund_decision(
@@ -323,16 +333,30 @@ class AIEngine:
 
         # 更新多轮对话上下文
         if ai_result.get('success'):
+            from models.system_config import SystemConfig
+            max_context_turns = int(SystemConfig.get('max_context_turns') or config.MAX_CONTEXT_TURNS)
+            context_timeout_minutes = int(SystemConfig.get('context_timeout_minutes') or config.CONTEXT_TIMEOUT_MINUTES)
             turns = context_history.copy()
             turns.append({'role': 'user', 'content': message})
             turns.append({'role': 'assistant', 'content': ai_result['reply']})
-            max_messages = config.MAX_CONTEXT_TURNS * 2
+            max_messages = max_context_turns * 2
             if len(turns) > max_messages:
                 turns = turns[-max_messages:]
             self.context_store.save_context(shop_id, buyer_id, turns,
-                                            timeout_minutes=config.CONTEXT_TIMEOUT_MINUTES)
+                                            timeout_minutes=context_timeout_minutes)
 
         self._update_message_record(msg_record, 'ai', ai_result.get('tokens', 0))
+
+        # 自动回复延迟（模拟人工，避免被平台检测）
+        try:
+            from models.system_config import SystemConfig
+            delay_min = int(SystemConfig.get('auto_reply_delay_min') or config.AUTO_REPLY_DELAY_MIN)
+            delay_max = int(SystemConfig.get('auto_reply_delay_max') or config.AUTO_REPLY_DELAY_MAX)
+            if delay_min > 0 or delay_max > 0:
+                time.sleep(random.uniform(delay_min, delay_max))
+        except Exception:
+            pass
+
         self._save_reply_message(shop_id, buyer_id, buyer_name, order_id,
                                  ai_result.get('reply', ''), 'ai', ai_result.get('tokens', 0))
 
@@ -374,7 +398,12 @@ class AIEngine:
 
             if context:
                 # 超时则重置会话
-                if context.is_expired(config.CONTEXT_TIMEOUT_MINUTES):
+                try:
+                    from models.system_config import SystemConfig
+                    timeout = int(SystemConfig.get('context_timeout_minutes') or config.CONTEXT_TIMEOUT_MINUTES)
+                except Exception:
+                    timeout = config.CONTEXT_TIMEOUT_MINUTES
+                if context.is_expired(timeout):
                     context.reset()
                     context.session_id = uuid.uuid4().hex
                     db.session.commit()
