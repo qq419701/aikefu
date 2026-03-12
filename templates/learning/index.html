@@ -14,6 +14,7 @@
     transition: box-shadow 0.2s;
 }
 .review-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.12); }
+.review-card.selected { border: 2px solid #0d6efd; }
 .buyer-msg { background: #f0f4ff; border-radius: 8px; padding: 10px 14px; }
 .ai-reply { background: #f0fff4; border-radius: 8px; padding: 10px 14px; }
 
@@ -21,6 +22,15 @@
 .progress-ring { width: 80px; height: 80px; }
 .stat-mini { text-align: center; padding: 12px; background: #f8f9fa; border-radius: 10px; }
 .stat-mini .number { font-size: 1.8rem; font-weight: 700; }
+
+/* 批量操作浮动工具栏 */
+.batch-toolbar {
+    position: sticky;
+    bottom: 16px;
+    z-index: 200;
+    display: none;
+}
+.batch-toolbar.show { display: block; }
 
 /* AI助手小窗口 */
 .ai-assistant-panel {
@@ -52,6 +62,12 @@
 /* 生成知识库模态框 */
 .topic-badge { cursor: pointer; }
 .topic-badge:hover { opacity: 0.8; }
+
+/* 学习模式标签 */
+.mode-badge-all { background: #198754; }
+.mode-badge-threshold { background: #0d6efd; }
+.mode-badge-auto { background: #0dcaf0; color: #000 !important; }
+.mode-badge-off { background: #6c757d; }
 </style>
 {% endblock %}
 
@@ -105,6 +121,39 @@
             </div>
             {% endif %}
 
+            <!-- 学习模式标签 -->
+            <div class="col-auto">
+                {% if learning_mode == 'all' %}
+                <span class="badge mode-badge-all text-white">🟢 全量学习模式</span>
+                {% elif learning_mode == 'auto' %}
+                <span class="badge mode-badge-auto">🔵 自动入库模式</span>
+                {% elif learning_mode == 'off' %}
+                <span class="badge mode-badge-off">⚫ 学习已关闭</span>
+                {% else %}
+                <span class="badge mode-badge-threshold text-white">🔵 阈值审核模式</span>
+                {% endif %}
+            </div>
+
+            <!-- 批量操作 -->
+            <div class="col-auto">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+                    <label class="form-check-label small" for="selectAll">全选</label>
+                </div>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-sm btn-outline-success" onclick="batchApproveSelected()">
+                    <i class="bi bi-check-all"></i> 批量入库
+                </button>
+                <button class="btn btn-sm btn-outline-danger ms-1" onclick="batchRejectSelected()">
+                    <i class="bi bi-x-lg"></i> 批量拒绝
+                </button>
+                <button class="btn btn-sm btn-success ms-1" onclick="batchApproveHigh()"
+                        title="将所有置信度≥阈值的记录一键入库">
+                    <i class="bi bi-lightning-charge"></i> 一键入库高置信度
+                </button>
+            </div>
+
             <!-- AI批量生成知识库 -->
             <div class="col-auto ms-auto">
                 <button class="btn btn-sm btn-outline-primary me-2"
@@ -128,16 +177,20 @@
         AI处理买家消息后，低置信度回复会自动进入此列表。
         您只需 <strong>确认</strong>（AI回复正确→入库）、<strong>修改</strong>（填写正确答案→入库）或 <strong>拒绝</strong>（不适合入库）。
         入库的问答对会立即生效，下次遇到相同问题AI将直接从知识库回答（0成本）。
+        <br><small class="text-muted">v3.0新增：批量操作、MaxKB自动同步、入库去重、学习模式可在<a href="/settings/">系统设置</a>中调整。</small>
     </div>
 </div>
 
 <!-- 待审核列表 -->
 {% if pending_items.items %}
 {% for item in pending_items.items %}
-<div class="review-card card">
+<div class="review-card card" id="card_{{ item.id }}">
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-start mb-3">
-            <div>
+            <div class="d-flex align-items-center gap-2">
+                <!-- B4 复选框 -->
+                <input type="checkbox" class="form-check-input record-checkbox"
+                       value="{{ item.id }}" onchange="onCheckboxChange()">
                 <span class="badge bg-secondary me-1">{{ item.process_by }}</span>
                 <span class="badge bg-light text-dark me-1">置信度 {{ '%.0f'|format(item.confidence * 100) }}%</span>
                 {% if item.intent != 'other' %}
@@ -145,6 +198,9 @@
                 {% endif %}
                 {% if item.industry %}
                 <span class="badge bg-warning text-dark">{{ item.industry.icon }} {{ item.industry.name }}</span>
+                {% endif %}
+                {% if item.shop_id %}
+                <span class="badge bg-light text-muted small">店铺#{{ item.shop_id }}</span>
                 {% endif %}
             </div>
             <small class="text-muted">
@@ -242,6 +298,22 @@
     </div>
 </div>
 {% endif %}
+
+<!-- 批量操作浮动工具栏 -->
+<div class="batch-toolbar" id="batchToolbar">
+    <div class="card border-primary shadow-lg">
+        <div class="card-body py-2 px-3 d-flex align-items-center gap-3">
+            <span class="fw-bold text-primary" id="selectedCount">已选0条</span>
+            <button class="btn btn-success btn-sm" onclick="batchApproveSelected()">
+                <i class="bi bi-check-all"></i> 批量入库
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="batchRejectSelected()">
+                <i class="bi bi-x-lg"></i> 批量拒绝
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="clearSelection()">取消选择</button>
+        </div>
+    </div>
+</div>
 
 
 <!-- AI批量生成知识库 模态框 -->
@@ -373,6 +445,93 @@ function submitModify(recordId) {
     document.getElementById('modifyForm_' + recordId).submit();
 }
 
+// ---- 批量操作 ----
+function getSelectedIds() {
+    return Array.from(document.querySelectorAll('.record-checkbox:checked')).map(cb => parseInt(cb.value));
+}
+
+function onCheckboxChange() {
+    var ids = getSelectedIds();
+    var toolbar = document.getElementById('batchToolbar');
+    var countEl = document.getElementById('selectedCount');
+    if (ids.length > 0) {
+        toolbar.classList.add('show');
+        countEl.textContent = '已选' + ids.length + '条';
+    } else {
+        toolbar.classList.remove('show');
+    }
+    // 高亮已选卡片
+    document.querySelectorAll('.record-checkbox').forEach(function(cb) {
+        var card = document.getElementById('card_' + cb.value);
+        if (card) card.classList.toggle('selected', cb.checked);
+    });
+    // 更新全选框状态
+    var all = document.querySelectorAll('.record-checkbox');
+    var checked = document.querySelectorAll('.record-checkbox:checked');
+    var selectAll = document.getElementById('selectAll');
+    if (selectAll) {
+        selectAll.checked = all.length > 0 && checked.length === all.length;
+        selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+    }
+}
+
+function toggleSelectAll(cb) {
+    document.querySelectorAll('.record-checkbox').forEach(function(el) {
+        el.checked = cb.checked;
+    });
+    onCheckboxChange();
+}
+
+function clearSelection() {
+    document.querySelectorAll('.record-checkbox').forEach(function(cb) { cb.checked = false; });
+    var selectAll = document.getElementById('selectAll');
+    if (selectAll) { selectAll.checked = false; selectAll.indeterminate = false; }
+    onCheckboxChange();
+}
+
+function batchApproveSelected() {
+    var ids = getSelectedIds();
+    if (ids.length === 0) { alert('请先选择记录'); return; }
+    if (!confirm('确认批量入库已选的' + ids.length + '条记录？')) return;
+    fetch('/learning/batch-approve', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({record_ids: ids})
+    }).then(r => r.json()).then(data => {
+        alert(data.message || (data.success ? '操作成功' : '操作失败'));
+        if (data.success) location.reload();
+    }).catch(err => alert('请求失败：' + err));
+}
+
+function batchRejectSelected() {
+    var ids = getSelectedIds();
+    if (ids.length === 0) { alert('请先选择记录'); return; }
+    if (!confirm('确认批量拒绝已选的' + ids.length + '条记录？')) return;
+    fetch('/learning/batch-reject', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({record_ids: ids})
+    }).then(r => r.json()).then(data => {
+        alert(data.message || (data.success ? '操作成功' : '操作失败'));
+        if (data.success) location.reload();
+    }).catch(err => alert('请求失败：' + err));
+}
+
+function batchApproveHigh() {
+    var industryId = null;
+    var selEl = document.querySelector('select[name="industry_id"]');
+    if (selEl) industryId = selEl.value ? parseInt(selEl.value) : null;
+    if (!confirm('将当前行业所有高置信度（≥阈值）的待审核记录一键入库？')) return;
+    fetch('/learning/batch-approve-high', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({industry_id: industryId})
+    }).then(r => r.json()).then(data => {
+        alert(data.message || (data.success ? '操作成功' : '操作失败'));
+        if (data.success) location.reload();
+    }).catch(err => alert('请求失败：' + err));
+}
+
 // AI批量生成知识库
 function generateKnowledge() {
     var industryId = document.getElementById('gen_industry_id').value;
@@ -500,9 +659,11 @@ setPageHelp('🎓 学习中心使用说明', `
   <li>✅ <strong>确认正确</strong>：AI回答准确，一键加入知识库</li>
   <li>✏️ <strong>修改后入库</strong>：回答有误，改正后加入知识库</li>
   <li>❌ <strong>不入库</strong>：回答偏差太大，拒绝</li>
+  <li>☑️ <strong>批量操作</strong>：勾选多条后批量入库/拒绝，或一键入库高置信度</li>
 </ul>
 <p>审核越多，知识库越完善，下次类似问题就不用花AI额度了。</p>
 <p><strong>AI批量生成</strong>：选择行业后，AI会主动生成该行业常见的问答，批量导入知识库。</p>
+<p><strong>学习模式</strong>可在<a href="/settings/">系统设置 → 学习中心设置</a>中调整（全量/阈值/自动/关闭）。</p>
 `);
 </script>
 {% endblock %}

@@ -17,7 +17,7 @@ import pytz
 
 # 系统名称及版本
 SYSTEM_NAME = "爱客服AI智能客服系统"
-SYSTEM_VERSION = "v2.0.0"
+SYSTEM_VERSION = "v3.0.0"
 
 # 服务端口（按需求设置为6000）
 PORT = 6000

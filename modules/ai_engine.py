@@ -638,18 +638,28 @@ class AIEngine:
         """
         实时增量学习触发检查
         功能：
-          1. 检查AI回复是否包含低置信度兜底词（如"不确定"、"您好我是"等）
-          2. 检查归一化后的相同问题是否出现 ≥ 2次
-          满足任一条件 → 自动创建LearningRecord（review_status=pending）供运营审核
+          根据学习模式（SystemConfig.learning_mode）动态决定是否创建学习记录：
+          - off      → 关闭学习，不创建任何记录
+          - all      → 全量模式，所有AI回复都进审核队列
+          - threshold→ 阈值模式（默认），低置信度或高频出现才进队列
+          - auto     → 自动模式，高置信度直接自动入库，低置信度进队列
         参数：
             message     - 买家原始消息
             reply       - AI生成的回复
             shop_id     - 店铺ID
             industry_id - 行业ID
-        说明：触发的学习记录需运营人员审核后才入库，保证知识库质量
+        说明：触发的学习记录需运营人员审核后才入库（auto模式高置信度除外）
         """
         from models.learning import LearningRecord
         from models.message import Message as MsgModel
+        from models.system_config import SystemConfig
+
+        # B8 从SystemConfig动态读取学习模式
+        learning_mode = SystemConfig.get('learning_mode', 'threshold')
+
+        # 关闭模式：不再生成学习记录
+        if learning_mode == 'off':
+            return
 
         # 低置信度兜底词列表（AI不确定时常用的回复词）
         LOW_CONFIDENCE_MARKERS = [
@@ -665,18 +675,34 @@ class AIEngine:
         import re
         normalized_msg = re.sub(r'[^\w\u4e00-\u9fff]', '', message)[:50]
 
-        # 查询同一行业中相同归一化消息的出现次数（最近7天）
-        from datetime import timedelta
-        week_ago = get_beijing_time() - timedelta(days=7)
-        similar_count = MsgModel.query.filter(
-            MsgModel.direction == 'in',
-            MsgModel.process_by == 'ai',
-            MsgModel.msg_time >= week_ago,
-            MsgModel.content.contains(normalized_msg[:20]),  # 模糊匹配前20字
-        ).count()
-
-        # 触发条件：低置信度 OR 高频出现（≥2次）
-        should_trigger = is_low_confidence or similar_count >= 2
+        # 全量模式：所有AI回复都进队列（不管置信度）
+        if learning_mode == 'all':
+            should_trigger = True
+            confidence_score = 0.3 if is_low_confidence else 0.6
+        elif learning_mode == 'auto':
+            # 自动模式：高置信度直接自动入库，其余进队列
+            auto_threshold = float(SystemConfig.get('learning_auto_approve_threshold', 0.85))
+            confidence_threshold = float(SystemConfig.get('learning_confidence_threshold', 0.7))
+            if not is_low_confidence:
+                # 高置信度回复：自动入库，不进审核队列
+                confidence_score = auto_threshold
+                should_trigger = True
+            else:
+                confidence_score = 0.3
+                should_trigger = True
+            _ = confidence_threshold  # 参数备用
+        else:
+            # threshold模式（默认）：低置信度 OR 高频出现（≥2次）才进队列
+            from datetime import timedelta
+            week_ago = get_beijing_time() - timedelta(days=7)
+            similar_count = MsgModel.query.filter(
+                MsgModel.direction == 'in',
+                MsgModel.process_by == 'ai',
+                MsgModel.msg_time >= week_ago,
+                MsgModel.content.contains(normalized_msg[:20]),  # 模糊匹配前20字
+            ).count()
+            should_trigger = is_low_confidence or similar_count >= 2
+            confidence_score = 0.3 if is_low_confidence else 0.6
 
         if not should_trigger:
             return
@@ -693,7 +719,53 @@ class AIEngine:
             # 已存在，不重复创建
             return
 
-        # 创建实时增量学习记录
+        # auto模式高置信度：自动入库（无需人工审核）
+        if learning_mode == 'auto' and not is_low_confidence:
+            from models.knowledge import KnowledgeBase
+            auto_threshold = float(SystemConfig.get('learning_auto_approve_threshold', 0.85))
+            kb_existing = KnowledgeBase.query.filter_by(
+                industry_id=industry_id,
+                question=message,
+            ).first()
+            if not kb_existing:
+                kb_item = KnowledgeBase(
+                    industry_id=industry_id,
+                    question=message,
+                    answer=reply,
+                    keywords='',
+                    category='general',
+                    priority=0,
+                    is_active=True,
+                    created_at=get_beijing_time(),
+                )
+                db.session.add(kb_item)
+                db.session.flush()
+                # 同步MaxKB
+                if config.MAXKB_ENABLED and SystemConfig.get('learning_maxkb_sync', True):
+                    try:
+                        from modules.maxkb_client import MaxKBClient
+                        MaxKBClient().upsert(kb_item.id, kb_item.question, kb_item.answer, '')
+                    except Exception:
+                        pass
+                # 记录已自动入库的学习记录（状态approved）
+                record = LearningRecord(
+                    industry_id=industry_id,
+                    shop_id=shop_id,
+                    buyer_message=message,
+                    ai_reply=reply,
+                    process_by='ai',
+                    intent='other',
+                    confidence=auto_threshold,
+                    review_status='approved',
+                    is_added_to_kb=True,
+                    kb_item_id=kb_item.id,
+                    created_at=get_beijing_time(),
+                )
+                db.session.add(record)
+                db.session.commit()
+            return
+
+        # 创建实时增量学习记录（pending，等待人工审核）
         record = LearningRecord(
             industry_id=industry_id,
             shop_id=shop_id,
@@ -701,7 +773,7 @@ class AIEngine:
             ai_reply=reply,
             process_by='ai',
             intent='other',
-            confidence=0.3 if is_low_confidence else 0.6,  # 低置信度标记更低分数
+            confidence=confidence_score,
             review_status='pending',
             created_at=get_beijing_time(),
         )

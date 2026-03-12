@@ -144,6 +144,14 @@ def _init_system_configs(app):
         dict(key='maxkb_dataset_id',      label='MaxKB数据集ID',     group='knowledge', value_type='string', description='MaxKB后台创建数据集后获取的ID', value=''),
         dict(key='knowledge_similarity',  label='知识库相似度阈值',   group='knowledge', value_type='float',  description='0.0-1.0，超过此值才认为匹配，越高越精准但漏匹配越多', value='0.6'),
         dict(key='maxkb_min_similarity',  label='MaxKB最低相似度',   group='knowledge', value_type='float',  description='MaxKB检索时低于此分数不返回结果', value='0.6'),
+        # ---- 学习中心配置（v3.0新增）----
+        dict(key='learning_mode',                   label='学习模式',                   group='learning', value_type='string', description='全量(all)/阈值(threshold)/自动(auto)/关闭(off)。threshold=低置信度才进审核；all=所有AI回复入队列；auto=高置信度自动入库；off=停止学习', value='threshold'),
+        dict(key='learning_confidence_threshold',   label='审核队列置信度上限',         group='learning', value_type='float',  description='低于此值才进审核队列（模式threshold），0.0-1.0', value='0.7'),
+        dict(key='learning_auto_approve_threshold', label='自动入库置信度下限',         group='learning', value_type='float',  description='高于此值直接自动入库不需人工（模式auto），0.0-1.0', value='0.85'),
+        dict(key='learning_dedup_enabled',          label='入库前去重检测',             group='learning', value_type='bool',   description='开启后入库时检查是否有精确相同的问题，避免重复', value='true'),
+        dict(key='learning_page_size',              label='学习中心每页显示条数',       group='learning', value_type='int',    description='学习中心每页显示待审核记录数量', value='20'),
+        dict(key='learning_maxkb_sync',             label='入库后自动同步MaxKB',        group='learning', value_type='bool',   description='审核入库后自动将新知识同步到MaxKB向量库', value='true'),
+        dict(key='kb_dedup_enabled',                label='知识库手动新增去重',         group='learning', value_type='bool',   description='手动添加/批量保存知识库条目时检测重复', value='true'),
         # ---- 系统行为配置 ----
         dict(key='auto_reply_delay_min',      label='自动回复最小延迟(秒)', group='behavior', value_type='int',   description='模拟人工输入，避免平台检测', value='1'),
         dict(key='auto_reply_delay_max',      label='自动回复最大延迟(秒)', group='behavior', value_type='int',   description='模拟人工输入，避免平台检测', value='3'),

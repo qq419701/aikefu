@@ -67,7 +67,7 @@ def add():
     """
     添加知识库条目
     GET：显示添加表单
-    POST：保存新条目
+    POST：保存新条目（v3.0：入库前去重检测）
     """
     if current_user.is_admin():
         industries = Industry.query.filter_by(is_active=True).all()
@@ -92,6 +92,17 @@ def add():
         if not current_user.can_manage_industry(industry_id):
             flash('无权限操作该行业', 'danger')
             return render_template('knowledge/add.html', industries=industries)
+
+        # B6 去重检测：精确匹配已有知识库条目
+        from models.system_config import SystemConfig
+        if SystemConfig.get('kb_dedup_enabled', True):
+            existing = KnowledgeBase.query.filter_by(
+                industry_id=industry_id,
+                question=question,
+            ).first()
+            if existing:
+                flash(f'该问题已存在于知识库（ID:{existing.id}），请勿重复添加', 'warning')
+                return render_template('knowledge/add.html', industries=industries)
 
         item = KnowledgeBase(
             industry_id=industry_id,
@@ -259,6 +270,7 @@ def api_batch_save():
     """
     批量保存AI生成的知识库条目
     功能：前端审核并勾选后，一次性入库多条知识
+    v3.0：入库后自动同步MaxKB，支持去重跳过
     请求格式（JSON）：
     {
         "industry_id": 1,
@@ -267,11 +279,12 @@ def api_batch_save():
             ...
         ]
     }
-    返回：{'success': True, 'saved': 保存数量}
+    返回：{'success': True, 'saved': 保存数量, 'skipped': 跳过数量}
     """
     import logging
     logger = logging.getLogger(__name__)
     try:
+        from models.system_config import SystemConfig
         data = request.get_json() or {}
         industry_id = int(data.get('industry_id') or 0)
         items = data.get('items') or []
@@ -285,13 +298,29 @@ def api_batch_save():
         if not items:
             return jsonify({'success': False, 'message': '没有可保存的条目'})
 
+        dedup_enabled = SystemConfig.get('kb_dedup_enabled', True)
+        maxkb_sync = SystemConfig.get('learning_maxkb_sync', True)
+
         saved_count = 0
+        skipped_count = 0
         now = get_beijing_time()
+        saved_items = []
         for item in items:
             question = (item.get('question') or '').strip()
             answer = (item.get('answer') or '').strip()
             if not question or not answer:
                 continue
+
+            # B6/B3 去重检测：跳过已有精确匹配条目
+            if dedup_enabled:
+                existing = KnowledgeBase.query.filter_by(
+                    industry_id=industry_id,
+                    question=question,
+                ).first()
+                if existing:
+                    skipped_count += 1
+                    continue
+
             kb = KnowledgeBase(
                 industry_id=industry_id,
                 question=question,
@@ -303,10 +332,28 @@ def api_batch_save():
                 created_at=now,
             )
             db.session.add(kb)
+            saved_items.append(kb)
             saved_count += 1
 
+        db.session.flush()  # Flush to get IDs for all new entries
         db.session.commit()
-        return jsonify({'success': True, 'saved': saved_count})
+
+        # B3 MaxKB同步：批量同步所有新增条目
+        if config.MAXKB_ENABLED and maxkb_sync and saved_items:
+            try:
+                from modules.maxkb_client import MaxKBClient
+                client = MaxKBClient()
+                for kb in saved_items:
+                    client.upsert(kb.id, kb.question, kb.answer, kb.keywords or '')
+            except Exception as e:
+                logger.warning(f"[知识库] batch-save MaxKB同步失败: {e}")
+
+        return jsonify({
+            'success': True,
+            'saved': saved_count,
+            'skipped': skipped_count,
+            'message': f'已保存{saved_count}条' + (f'，跳过重复{skipped_count}条' if skipped_count else ''),
+        })
 
     except Exception as e:
         logger.error(f"[知识库] 批量保存异常: {e}", exc_info=True)

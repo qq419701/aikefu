@@ -1,6 +1,50 @@
-# 爱客服AI智能客服系统 V2 技术架构文档
+# 爱客服AI智能客服系统 V2/V3 技术架构文档
 
-> 版本：v2.1.0 | 更新时间：2026-03-11 | 语言：Python 3.11+ / Flask 3.x
+> 版本：v3.0.0 | 更新时间：2026-03-12 | 语言：Python 3.11+ / Flask 3.x
+
+---
+
+## v3.0 更新说明（知识库 & 学习中心全面升级）
+
+### 🔴 P0 Bug修复
+
+| 编号 | 模块 | 问题 | 状态 |
+|------|------|------|------|
+| B1 | 学习中心 | `approve()` 入库后无 MaxKB 同步 | ✅ 已修复 |
+| B2 | 学习中心 | `modify()` 入库后无 MaxKB 同步 | ✅ 已修复 |
+| B3 | 知识库 | `api/batch-save` 批量保存无 MaxKB 同步 | ✅ 已修复 |
+| B4 | 学习中心 | 无批量操作（逐条点击效率低） | ✅ 已修复 |
+| B5 | 学习中心 | 入库时无重复检测 | ✅ 已修复 |
+| B6 | 知识库 | 手动添加/批量保存时无重复检测 | ✅ 已修复 |
+| B7 | 系统设置 | 无学习模式配置 | ✅ 已修复 |
+| B8 | AI引擎 | `_check_learning_trigger` 触发条件写死 | ✅ 已修复 |
+
+### 🚀 新功能
+
+**批量操作（B4）**
+- `POST /learning/batch-approve` - 批量确认入库（含去重+MaxKB同步）
+- `POST /learning/batch-reject` - 批量拒绝
+- `POST /learning/batch-approve-high` - 一键入库所有高置信度记录
+- 学习中心UI：每条记录前增加复选框，支持全选/反选，浮动批量操作工具栏
+
+**学习模式配置（B7/B8）**
+- 在系统设置 → 学习中心设置中可动态调整学习模式：
+  - 🟢 **全量模式（all）**：所有AI回复都进审核队列（刚上线阶段）
+  - 🔵 **阈值模式（threshold）**：低置信度才进审核队列（默认）
+  - 🔵 **自动模式（auto）**：高置信度自动入库，低置信度进队列
+  - ⚫ **关闭模式（off）**：停止生成学习记录（知识库成熟后）
+
+**新增系统配置项（v3.0）**
+
+| 配置键 | 类型 | 说明 | 默认值 |
+|--------|------|------|--------|
+| `learning_mode` | string | 学习模式 | `threshold` |
+| `learning_confidence_threshold` | float | 进审核队列的置信度上限 | `0.7` |
+| `learning_auto_approve_threshold` | float | 自动入库的置信度下限 | `0.85` |
+| `learning_dedup_enabled` | bool | 入库前去重检测 | `true` |
+| `learning_page_size` | int | 学习中心每页条数 | `20` |
+| `learning_maxkb_sync` | bool | 入库后自动同步MaxKB | `true` |
+| `kb_dedup_enabled` | bool | 知识库手动添加去重 | `true` |
 
 ---
 
