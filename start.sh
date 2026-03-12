@@ -2,7 +2,7 @@
 cd /www/wwwroot/aikefu
 source /www/wwwroot/aikefu/venv/bin/activate
 exec gunicorn \
-  --bind 0.0.0.0:5000 \
+  --bind 0.0.0.0:8000 \
   --workers 2 \
   --threads 4 \
   --timeout 120 \

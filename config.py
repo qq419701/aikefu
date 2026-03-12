@@ -19,8 +19,8 @@ import pytz
 SYSTEM_NAME = "爱客服AI智能客服系统"
 SYSTEM_VERSION = "v3.0.0"
 
-# 服务端口（按需求设置为6000）
-PORT = 6000
+# 服务端口
+PORT = 8000
 
 # 应用目录名称
 APP_DIR = "aikefu"

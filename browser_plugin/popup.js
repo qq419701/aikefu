@@ -2,7 +2,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.get(['serverUrl', 'shopToken', 'autoReply'], (result) => {
-        document.getElementById('serverUrl').value = result.serverUrl || 'http://127.0.0.1:6000';
+        document.getElementById('serverUrl').value = result.serverUrl || 'http://127.0.0.1:8000';
         document.getElementById('shopToken').value = result.shopToken || '';
         document.getElementById('autoReply').checked = result.autoReply !== false;
     });
@@ -31,7 +31,7 @@ function saveSettings() {
 }
 
 function testConnection() {
-    const serverUrl = document.getElementById('serverUrl').value.trim().replace(/\/$/, '') || 'http://127.0.0.1:6000';
+    const serverUrl = document.getElementById('serverUrl').value.trim().replace(/\/$/, '') || 'http://127.0.0.1:8000';
     setStatus('checking', '检测中...');
     chrome.runtime.sendMessage({ action: 'testConnection', serverUrl }, (response) => {
         if (chrome.runtime.lastError) { setStatus('disconnected', '插件通信错误'); return; }

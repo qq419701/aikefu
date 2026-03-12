@@ -280,7 +280,7 @@ import requests
 import time
 import threading
 
-SERVER = "https://example.com:6000"  # 生产环境请使用 HTTPS
+SERVER = "https://example.com:8000"  # 生产环境请使用 HTTPS
 
 # 1. 登录获取 client_token
 resp = requests.post(f"{SERVER}/api/client/login", json={
