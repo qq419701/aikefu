@@ -926,16 +926,21 @@ git pull origin main
 
 ### 17.3 可配置的AI参数
 
+所有参数均支持**后台热更新**（无需重启服务），每次处理消息时从数据库动态读取：
+
 | 配置键 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
 | `doubao_api_key` | string | — | 火山方舟 API Key（加密存储） |
 | `doubao_lite_model` | string | doubao-lite-32k | Lite模型名（意图/多轮/知识生成） |
 | `doubao_pro_model` | string | doubao-pro-32k | Pro模型名（情绪安抚/退款决策） |
-| `doubao_vision_model` | string | doubao-vision-pro-32k | Vision模型名（图片分析） |
 | `doubao_temperature` | float | 0.3 | AI温度（0-1，越低越稳定） |
 | `doubao_max_tokens` | int | 500 | 单次回复最大Token |
 | `max_context_turns` | int | 10 | 多轮对话保留轮次 |
 | `context_timeout_minutes` | int | 30 | 会话超时分钟数 |
+| `knowledge_similarity` | float | 0.6 | 知识库相似度阈值 |
+| `auto_reply_delay_min` | int | 1 | 自动回复最小延迟（秒，模拟人工） |
+| `auto_reply_delay_max` | int | 3 | 自动回复最大延迟（秒，模拟人工） |
+| `human_intervention_level` | int | 3 | 触发转人工的情绪级别（0-4） |
 
 ### 17.4 可配置的知识库参数
 
@@ -945,7 +950,6 @@ git pull origin main
 | `maxkb_api_url` | string | — | MaxKB服务地址 |
 | `maxkb_api_key` | string | — | MaxKB API Key |
 | `maxkb_dataset_id` | string | — | MaxKB数据集ID |
-| `knowledge_similarity_threshold` | float | 0.6 | 知识库相似度阈值 |
 
 ### 17.5 相关路由
 
