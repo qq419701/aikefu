@@ -113,7 +113,7 @@
 | 向量检索 | MaxKB（可选） | 语义相似度检索，命中率~85% |
 | 定时任务 | APScheduler | 北京时间定时，统计/学习/黑名单 |
 | 时区 | pytz Asia/Shanghai | 全系统统一北京时间（UTC+8） |
-| 部署 | Gunicorn + Docker | `-w 2 -b 0.0.0.0:6000 "app:create_app()"` |
+| 部署 | Gunicorn + Docker | `-w 2 -b 0.0.0.0:8000 "app:create_app()"` |
 
 ---
 
@@ -773,7 +773,7 @@ services:
   web:
     build: .
     ports:
-      - "8081:6000"        # 宿主机8081 → 容器6000
+      - "8000:8000"        # 宿主机8000 → 容器8000
     env_file:
       - .env
     volumes:
@@ -826,7 +826,7 @@ pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 cp .env.example .env   # 编辑 .env 填写数据库/API密钥
 
 # 4. 启动（宝塔Python项目管理器配置）
-gunicorn -w 2 -b 0.0.0.0:6000 --timeout 120 "app:create_app()"
+gunicorn -w 2 -b 0.0.0.0:8000 --timeout 120 "app:create_app()"
 
 # 5. 以后更新代码只需
 git pull origin main
@@ -987,7 +987,7 @@ git pull origin main
 ```
 客户端启动
     ↓
-填写服务器地址（如 https://example.com:6000，生产环境请使用 HTTPS）
+填写服务器地址（如 https://example.com:8000，生产环境请使用 HTTPS）
     ↓
 填写账号/密码（与爱客服管理后台账号相同）
     ↓
@@ -1249,7 +1249,7 @@ X-Shop-Token: <shop_token>
 ```python
 import requests
 
-SERVER = "https://example.com:6000"  # 生产环境请使用 HTTPS
+SERVER = "https://example.com:8000"  # 生产环境请使用 HTTPS
 
 # 1. 登录获取 client_token
 resp = requests.post(f"{SERVER}/api/client/login", json={

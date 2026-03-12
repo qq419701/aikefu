@@ -73,7 +73,7 @@ async function testServerConnection(serverUrl) {
 chrome.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
         chrome.storage.local.set({
-            serverUrl: 'http://127.0.0.1:6000',
+            serverUrl: 'http://127.0.0.1:8000',
             shopToken: '',
             autoReply: true,
         });

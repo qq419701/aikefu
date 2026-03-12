@@ -70,7 +70,7 @@ supervisorctl restart aikefu:aikefu_00
 tail -50 /www/wwwroot/aikefu/logs/error.log
 ```
 
-服务运行在端口 **5000**，由 supervisor + gunicorn 管理。
+服务运行在端口 **8000**，由 supervisor + gunicorn 管理。
 
 ---
 
