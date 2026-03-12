@@ -97,22 +97,35 @@
             <thead class="table-light">
                 <tr>
                     <th class="ps-3">行业</th>
+                    <th>数据集</th>
                     <th>本地条目</th>
                     <th>已同步</th>
                     <th>同步进度</th>
+                    <th>操作</th>
                 </tr>
             </thead>
             <tbody>
                 {% for stat in industry_stats %}
                 <tr>
                     <td class="ps-3">{{ stat.icon }} {{ stat.name }}</td>
+                    <td>
+                        {% if stat.maxkb_dataset_id %}
+                            <span class="badge bg-info-subtle text-info border border-info-subtle" title="{{ stat.maxkb_dataset_id }}">
+                                <i class="bi bi-robot"></i> 已配置
+                            </span>
+                        {% else %}
+                            <span class="badge bg-light text-muted border">
+                                <i class="bi bi-robot"></i> 使用默认
+                            </span>
+                        {% endif %}
+                    </td>
                     <td>{{ stat.total }}</td>
                     <td>
                         <span class="badge {% if stat.synced == stat.total and stat.total > 0 %}bg-success{% elif stat.synced > 0 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
                             {{ stat.synced }}
                         </span>
                     </td>
-                    <td style="min-width:150px;">
+                    <td style="min-width:120px;">
                         {% if stat.total > 0 %}
                         {% set pct = (stat.synced / stat.total * 100)|int %}
                         <div class="progress" style="height:8px;">
@@ -123,6 +136,14 @@
                         {% else %}
                         <small class="text-muted">-</small>
                         {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary"
+                                onclick="syncIndustry({{ stat.id }}, this)"
+                                {% if not maxkb_enabled %}disabled{% endif %}>
+                            <i class="bi bi-arrow-repeat"></i> 同步
+                        </button>
+                        <span class="industry-sync-result-{{ stat.id }} ms-1 small"></span>
                     </td>
                 </tr>
                 {% endfor %}
@@ -151,7 +172,7 @@ function testConnection() {
 }
 
 function syncAll() {
-    if (!confirm('确认将全部本地知识库同步到MaxKB？这可能需要一些时间。')) return;
+    if (!confirm('确认将全部本地知识库按行业同步到MaxKB？这可能需要一些时间。')) return;
     var result = document.getElementById('sync-result');
     var progress = document.getElementById('sync-progress');
     result.innerHTML = '<span class="text-muted">同步中，请稍候...</span>';
@@ -171,6 +192,29 @@ function syncAll() {
             progress.style.display = 'none';
             result.innerHTML = '<span class="text-danger">请求失败</span>';
         });
+}
+
+function syncIndustry(industryId, btn) {
+    btn.disabled = true;
+    var resultEl = document.querySelector('.industry-sync-result-' + industryId);
+    if (resultEl) resultEl.innerHTML = '<span class="text-muted">同步中...</span>';
+    fetch('/settings/maxkb/sync-industry/' + industryId, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        if (resultEl) {
+            resultEl.innerHTML = data.success
+                ? '<span class="text-success"><i class="bi bi-check-circle"></i> ' + data.message + '</span>'
+                : '<span class="text-danger"><i class="bi bi-x-circle"></i> ' + data.message + '</span>';
+        }
+    })
+    .catch(() => {
+        btn.disabled = false;
+        if (resultEl) resultEl.innerHTML = '<span class="text-danger">请求失败</span>';
+    });
 }
 </script>
 {% endblock %}

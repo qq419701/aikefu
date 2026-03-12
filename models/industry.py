@@ -49,6 +49,9 @@ class Industry(db.Model):
     # 触发人工干预的情绪阈值
     human_intervention_level = db.Column(db.Integer, default=3)
 
+    # MaxKB数据集ID（行业专属，优先于全局配置）
+    maxkb_dataset_id = db.Column(db.String(200), default='', nullable=True)
+
     # 行业状态（是否启用）
     is_active = db.Column(db.Boolean, default=True)
 
@@ -82,6 +85,7 @@ class Industry(db.Model):
             'vision_enabled': self.vision_enabled,
             'emotion_enabled': self.emotion_enabled,
             'is_active': self.is_active,
+            'maxkb_dataset_id': self.maxkb_dataset_id or '',
             'shop_count': self.shops.count(),
             'knowledge_count': self.knowledge_items.count(),
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',

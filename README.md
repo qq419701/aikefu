@@ -94,3 +94,27 @@ tail -50 /www/wwwroot/aikefu/logs/error.log
 | AI批量生成 | `/knowledge/generate` | AI生成知识库条目 |
 | 系统设置 | `/settings/` | AI参数、学习模式等配置 |
 | MaxKB管理 | `/settings/maxkb` | MaxKB连接与同步（管理员） |
+
+
+---
+
+## v3.1.0 (2026-03-12)
+
+### 🆕 新功能
+- **行业级MaxKB数据集隔离**：每个行业可在「行业管理→编辑」页面单独配置 MaxKB 数据集ID，知识库按行业完全隔离，语义检索精度大幅提升
+- **配置统一数据库管理**：MaxKB 所有连接参数（服务地址、API Key、数据集ID）统一在系统设置后台管理，无需修改 `.env` 文件，修改后实时生效
+
+### 🔧 优化
+- `MaxKBClient` 初始化优先从数据库读取配置，fallback 到 `config.py`，彻底解决后台改了不生效的问题
+- 新增 `MaxKBClient.for_industry(industry_id)` 工厂方法，自动按行业选择数据集
+- 行业卡片新增 MaxKB 配置状态徽章（✅已配置/默认）
+- MaxKB管理面板行业统计表格新增「数据集」列和「同步」按钮
+- 新增「按行业同步」接口 `POST /settings/maxkb/sync-industry/<id>` 和 `POST /industry/<id>/sync-maxkb`
+- `search()` 方法相似度阈值改为从数据库配置（`self.min_similarity`），不再硬读 `config.py`
+
+### 📋 升级说明
+1. 执行数据库迁移添加 `industries.maxkb_dataset_id` 字段（系统启动时自动执行）
+2. 在 MaxKB 后台为每个行业创建独立数据集，复制数据集ID
+3. 在「行业管理→编辑」页面填入各行业的 MaxKB 数据集ID
+4. 点击「立即同步」将知识库同步到对应数据集
+5. `.env` 中的 `MAXKB_DATASET_ID` 保留作为兜底配置
