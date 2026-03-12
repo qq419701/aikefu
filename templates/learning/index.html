@@ -192,7 +192,14 @@
                 <input type="checkbox" class="form-check-input record-checkbox"
                        value="{{ item.id }}" onchange="onCheckboxChange()">
                 <span class="badge bg-secondary me-1">{{ item.process_by }}</span>
-                <span class="badge bg-light text-dark me-1">置信度 {{ '%.0f'|format(item.confidence * 100) }}%</span>
+                {% set conf_pct = (item.confidence * 100)|int %}
+                {% if conf_pct < 30 %}
+                <span class="badge bg-danger me-1">置信度 {{ conf_pct }}%</span>
+                {% elif conf_pct < 60 %}
+                <span class="badge bg-warning text-dark me-1">置信度 {{ conf_pct }}%</span>
+                {% else %}
+                <span class="badge bg-success me-1">置信度 {{ conf_pct }}%</span>
+                {% endif %}
                 {% if item.intent != 'other' %}
                 <span class="badge bg-info">{{ item.intent }}</span>
                 {% endif %}
@@ -235,7 +242,7 @@
         <div class="mt-3 d-flex gap-2">
             <!-- 确认入库 -->
             <form method="POST" action="{{ url_for('learning.approve', record_id=item.id) }}">
-                <button type="submit" class="btn btn-success btn-sm">
+                <button type="submit" class="btn btn-success btn-sm{% if loop.first %} btn-approve-first{% endif %}">
                     <i class="bi bi-check-circle"></i> 确认入库
                 </button>
             </form>
@@ -252,7 +259,7 @@
 
             <!-- 拒绝 -->
             <form method="POST" action="{{ url_for('learning.reject', record_id=item.id) }}">
-                <button type="submit" class="btn btn-outline-danger btn-sm"
+                <button type="submit" class="btn btn-outline-danger btn-sm{% if loop.first %} btn-reject-first{% endif %}"
                         onclick="return confirm('确认拒绝？该问答对将不会入库知识库')">
                     <i class="bi bi-x-circle"></i> 拒绝
                 </button>
@@ -652,6 +659,26 @@ function askAi() {
 function escapeHtml(str) {
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+// 快捷键支持：Y=确认入库第一条，N=拒绝第一条，→=下一页
+document.addEventListener('keydown', function(e) {
+    // 忽略输入框和文本区域中的按键
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'y' || e.key === 'Y') {
+        var btn = document.querySelector('.btn-approve-first');
+        if (btn) btn.click();
+    } else if (e.key === 'n' || e.key === 'N') {
+        var btn = document.querySelector('.btn-reject-first');
+        if (btn) btn.click();
+    } else if (e.key === 'ArrowRight') {
+        var items = document.querySelectorAll('.pagination .page-item');
+        var lastItem = items.length > 0 ? items[items.length - 1] : null;
+        if (lastItem && !lastItem.classList.contains('active')) {
+            var nextLink = lastItem.querySelector('.page-link');
+            if (nextLink && nextLink.href) nextLink.click();
+        }
+    }
+});
 
 setPageHelp('🎓 学习中心使用说明', `
 <p><strong>每天花5分钟审核AI回复：</strong></p>

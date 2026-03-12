@@ -119,8 +119,16 @@ def add():
 
         # 如果MaxKB已启用，自动同步新条目到MaxKB向量库
         if config.MAXKB_ENABLED:
-            from modules.maxkb_client import MaxKBClient
-            MaxKBClient().upsert(item.id, question, answer, keywords)
+            try:
+                from modules.maxkb_client import MaxKBClient
+                ok = MaxKBClient().upsert(item.id, question, answer, keywords)
+                if ok:
+                    item.maxkb_synced = True
+                    item.maxkb_synced_at = get_beijing_time()
+                    db.session.commit()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"[知识库] add MaxKB同步失败: {e}")
 
         flash('知识库条目添加成功', 'success')
         return redirect(url_for('knowledge.index', industry_id=industry_id))
@@ -161,8 +169,16 @@ def edit(item_id):
 
         # 如果MaxKB已启用，自动同步更新到MaxKB向量库
         if config.MAXKB_ENABLED:
-            from modules.maxkb_client import MaxKBClient
-            MaxKBClient().upsert(item.id, item.question, item.answer, item.keywords or '')
+            try:
+                from modules.maxkb_client import MaxKBClient
+                ok = MaxKBClient().upsert(item.id, item.question, item.answer, item.keywords or '')
+                if ok:
+                    item.maxkb_synced = True
+                    item.maxkb_synced_at = get_beijing_time()
+                    db.session.commit()
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"[知识库] edit MaxKB同步失败: {e}")
 
         flash('知识库条目已更新', 'success')
         return redirect(url_for('knowledge.index', industry_id=item.industry_id))
@@ -343,8 +359,13 @@ def api_batch_save():
             try:
                 from modules.maxkb_client import MaxKBClient
                 client = MaxKBClient()
+                now_sync = get_beijing_time()
                 for kb in saved_items:
-                    client.upsert(kb.id, kb.question, kb.answer, kb.keywords or '')
+                    ok = client.upsert(kb.id, kb.question, kb.answer, kb.keywords or '')
+                    if ok:
+                        kb.maxkb_synced = True
+                        kb.maxkb_synced_at = now_sync
+                db.session.commit()
             except Exception as e:
                 logger.warning(f"[知识库] batch-save MaxKB同步失败: {e}")
 
@@ -359,3 +380,106 @@ def api_batch_save():
         logger.error(f"[知识库] 批量保存异常: {e}", exc_info=True)
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)})
+
+
+@knowledge_bp.route('/stats')
+@login_required
+def stats():
+    """
+    知识库健康仪表盘
+    展示：总条数、MaxKB已同步数、命中0次死条目、本周命中TOP10、MaxKB连接状态
+    """
+    from datetime import timedelta
+    from models.system_config import SystemConfig
+
+    industry_id = request.args.get('industry_id', type=int)
+
+    if current_user.is_admin():
+        industries = Industry.query.filter_by(is_active=True).all()
+    else:
+        industries = Industry.query.filter_by(
+            id=current_user.industry_id, is_active=True
+        ).all()
+        if not industry_id:
+            industry_id = current_user.industry_id
+
+    base_query = KnowledgeBase.query
+    if industry_id:
+        base_query = base_query.filter_by(industry_id=industry_id)
+    elif not current_user.is_admin():
+        base_query = base_query.filter_by(industry_id=current_user.industry_id)
+
+    total_count = base_query.count()
+    synced_count = base_query.filter_by(maxkb_synced=True).count()
+    dead_count = base_query.filter_by(hit_count=0).count()
+
+    # 本周新增
+    week_start = get_beijing_time().replace(hour=0, minute=0, second=0)
+    week_start = week_start - timedelta(days=week_start.weekday())
+    week_new = base_query.filter(KnowledgeBase.created_at >= week_start).count()
+
+    # 命中TOP10
+    top10 = base_query.order_by(KnowledgeBase.hit_count.desc()).limit(10).all()
+
+    # MaxKB统计
+    maxkb_stats = {'connected': False, 'total_docs': 0}
+    if config.MAXKB_ENABLED:
+        try:
+            from modules.maxkb_client import MaxKBClient
+            maxkb_stats = MaxKBClient().get_stats()
+        except Exception:
+            pass
+
+    return render_template('knowledge/stats.html',
+        industries=industries,
+        selected_industry=industry_id,
+        total_count=total_count,
+        synced_count=synced_count,
+        dead_count=dead_count,
+        week_new=week_new,
+        top10=top10,
+        maxkb_stats=maxkb_stats,
+    )
+
+
+@knowledge_bp.route('/api/check-duplicate', methods=['POST'])
+@login_required
+def api_check_duplicate():
+    """
+    实时去重检测API
+    请求格式（JSON）：{"industry_id": 1, "question": "问题文本"}
+    返回：{"exact": bool, "similar": [...], "existing_id": int or null}
+    """
+    data = request.get_json() or {}
+    try:
+        industry_id = int(data.get('industry_id') or 0)
+    except (TypeError, ValueError):
+        industry_id = 0
+    question = (data.get('question') or '').strip()
+
+    if not industry_id or not question:
+        return jsonify({'success': False, 'message': '缺少参数'})
+
+    # 层1：精确匹配DB
+    existing = KnowledgeBase.query.filter_by(
+        industry_id=industry_id,
+        question=question,
+    ).first()
+    exact = existing is not None
+    existing_id = existing.id if existing else None
+
+    # 层2：MaxKB语义相似
+    similar = []
+    if config.MAXKB_ENABLED and not exact:
+        try:
+            from modules.maxkb_client import MaxKBClient
+            similar = MaxKBClient().search_similar(question, top_k=3)
+        except Exception:
+            pass
+
+    return jsonify({
+        'success': True,
+        'exact': exact,
+        'existing_id': existing_id,
+        'similar': similar,
+    })

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}MaxKB管理面板{% endblock %}
+{% block page_title %}MaxKB管理面板{% endblock %}
+{% block page_subtitle %}MaxKB向量库连接状态、同步管理{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+    <!-- 连接状态卡片 -->
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-transparent fw-semibold">🔗 连接状态</div>
+            <div class="card-body text-center py-4">
+                {% if not maxkb_enabled %}
+                <div class="fs-1 mb-2">⚙️</div>
+                <div class="fw-semibold text-secondary">MaxKB未启用</div>
+                <p class="small text-muted mt-2">
+                    在<a href="{{ url_for('settings.index') }}">系统设置 → 知识库设置</a>中启用
+                </p>
+                {% elif maxkb_stats.connected %}
+                <div class="fs-1 mb-2">✅</div>
+                <div class="fw-semibold text-success">连接正常</div>
+                <p class="small text-muted mt-2">数据集ID: {{ maxkb_stats.dataset_id or '-' }}</p>
+                {% else %}
+                <div class="fs-1 mb-2">❌</div>
+                <div class="fw-semibold text-danger">连接失败</div>
+                <p class="small text-muted mt-2">请检查服务地址和API Key</p>
+                {% endif %}
+                <button class="btn btn-outline-secondary btn-sm mt-2" onclick="testConnection()">
+                    <i class="bi bi-wifi"></i> 测试连接
+                </button>
+                <div id="test-result" class="mt-2 small"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 数据统计卡片 -->
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-transparent fw-semibold">📊 数据统计</div>
+            <div class="card-body">
+                <div class="row g-2 text-center mb-3">
+                    <div class="col-6">
+                        <div class="fs-3 fw-bold text-primary">{{ local_total }}</div>
+                        <div class="text-muted small">本地总条目</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="fs-3 fw-bold {% if maxkb_stats.connected %}text-success{% else %}text-secondary{% endif %}">
+                            {{ maxkb_stats.total_docs }}
+                        </div>
+                        <div class="text-muted small">MaxKB文档数</div>
+                    </div>
+                </div>
+                <div class="row g-2 text-center">
+                    <div class="col-6">
+                        <div class="fs-3 fw-bold text-success">{{ local_synced }}</div>
+                        <div class="text-muted small">已同步</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="fs-3 fw-bold text-danger">{{ local_total - local_synced }}</div>
+                        <div class="text-muted small">未同步</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作卡片 -->
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-transparent fw-semibold">⚡ 操作</div>
+            <div class="card-body d-flex flex-column gap-2">
+                <button class="btn btn-primary" onclick="syncAll()" {% if not maxkb_enabled %}disabled{% endif %}>
+                    <i class="bi bi-arrow-repeat"></i> 一键全量同步
+                </button>
+                <div id="sync-result" class="small"></div>
+                <div class="progress mt-2" style="height:8px;display:none;" id="sync-progress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width:100%"></div>
+                </div>
+                <hr class="my-1">
+                <a href="{{ url_for('knowledge.stats') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-bar-chart"></i> 知识库健康仪表盘
+                </a>
+                <a href="{{ url_for('settings.index') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-gear"></i> 系统设置
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 按行业同步状态 -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-transparent fw-semibold">🏭 按行业同步状态</div>
+    <div class="card-body p-0">
+        {% if industry_stats %}
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-3">行业</th>
+                    <th>本地条目</th>
+                    <th>已同步</th>
+                    <th>同步进度</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stat in industry_stats %}
+                <tr>
+                    <td class="ps-3">{{ stat.icon }} {{ stat.name }}</td>
+                    <td>{{ stat.total }}</td>
+                    <td>
+                        <span class="badge {% if stat.synced == stat.total and stat.total > 0 %}bg-success{% elif stat.synced > 0 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                            {{ stat.synced }}
+                        </span>
+                    </td>
+                    <td style="min-width:150px;">
+                        {% if stat.total > 0 %}
+                        {% set pct = (stat.synced / stat.total * 100)|int %}
+                        <div class="progress" style="height:8px;">
+                            <div class="progress-bar {% if pct == 100 %}bg-success{% elif pct > 50 %}bg-warning{% else %}bg-danger{% endif %}"
+                                 style="width:{{ pct }}%" title="{{ pct }}%"></div>
+                        </div>
+                        <small class="text-muted">{{ pct }}%</small>
+                        {% else %}
+                        <small class="text-muted">-</small>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-4 text-muted">暂无行业数据</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function testConnection() {
+    var result = document.getElementById('test-result');
+    result.innerHTML = '<span class="text-muted">测试中...</span>';
+    fetch('/settings/test-maxkb', {method: 'POST', headers: {'Content-Type': 'application/json'}})
+        .then(r => r.json())
+        .then(data => {
+            result.innerHTML = data.success
+                ? '<span class="text-success"><i class="bi bi-check-circle"></i> ' + data.message + '</span>'
+                : '<span class="text-danger"><i class="bi bi-x-circle"></i> ' + data.message + '</span>';
+        })
+        .catch(() => { result.innerHTML = '<span class="text-danger">请求失败</span>'; });
+}
+
+function syncAll() {
+    if (!confirm('确认将全部本地知识库同步到MaxKB？这可能需要一些时间。')) return;
+    var result = document.getElementById('sync-result');
+    var progress = document.getElementById('sync-progress');
+    result.innerHTML = '<span class="text-muted">同步中，请稍候...</span>';
+    progress.style.display = '';
+    fetch('/settings/maxkb/sync-all', {method: 'POST', headers: {'Content-Type': 'application/json'}})
+        .then(r => r.json())
+        .then(data => {
+            progress.style.display = 'none';
+            if (data.success) {
+                result.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> ' + data.message + '</span>';
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                result.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> ' + data.message + '</span>';
+            }
+        })
+        .catch(() => {
+            progress.style.display = 'none';
+            result.innerHTML = '<span class="text-danger">请求失败</span>';
+        });
+}
+</script>
+{% endblock %}
