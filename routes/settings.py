@@ -25,6 +25,7 @@ def index():
         'ai':        {'label': '🤖 AI参数设置',    'icon': 'robot',    'desc': '豆包AI模型、Token、温度等参数'},
         'context':   {'label': '💬 多轮对话设置',  'icon': 'comments',  'desc': '会话上下文轮次、超时时间'},
         'knowledge': {'label': '📚 知识库设置',    'icon': 'book',     'desc': 'MaxKB语义检索、相似度阈值'},
+        'learning':  {'label': '🎓 学习中心设置',  'icon': 'mortarboard', 'desc': '学习模式、去重、自动同步MaxKB（v3.0）'},
         'behavior':  {'label': '⚙️ 系统行为',      'icon': 'cogs',     'desc': '回复延迟、黑名单、数据保留'},
     }
     configs = {}
