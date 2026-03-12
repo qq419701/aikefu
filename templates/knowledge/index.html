@@ -33,6 +33,10 @@
                 </select>
             </div>
             <div class="col-auto ms-auto d-flex gap-2">
+                <a href="{{ url_for('knowledge.stats') }}"
+                   class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-bar-chart"></i> 健康仪表盘
+                </a>
                 <a href="{{ url_for('knowledge.generate') }}"
                    class="btn btn-outline-primary btn-sm">
                     <i class="bi bi-robot"></i> AI批量生成
@@ -59,6 +63,7 @@
                         <th>答案预览</th>
                         <th>关键词</th>
                         <th>命中次数</th>
+                        <th>MaxKB</th>
                         <th>状态</th>
                         <th>操作</th>
                     </tr>
@@ -84,7 +89,16 @@
                             </small>
                         </td>
                         <td class="text-center">
-                            <span class="badge bg-light text-dark">{{ item.hit_count }}</span>
+                            <span class="badge {% if item.hit_count > 10 %}bg-success{% elif item.hit_count > 0 %}bg-info text-dark{% else %}bg-light text-muted{% endif %}">
+                                命中 {{ item.hit_count }}次
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            {% if item.maxkb_synced %}
+                            <span class="badge bg-success" title="已同步: {{ item.maxkb_synced_at }}">✅</span>
+                            {% else %}
+                            <span class="badge bg-secondary">❌</span>
+                            {% endif %}
                         </td>
                         <td>
                             {% if item.is_active %}

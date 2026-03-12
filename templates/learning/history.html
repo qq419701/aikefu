@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}审核历史{% endblock %}
+{% block page_title %}审核历史{% endblock %}
+{% block page_subtitle %}查看已审核的AI回复记录（已入库/已修改/已拒绝）{% endblock %}
+
+{% block content %}
+<!-- 筛选栏 -->
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            {% if current_user.is_admin() %}
+            <div class="col-md-3">
+                <label class="form-label mb-1 small">行业筛选</label>
+                <select class="form-select form-select-sm" name="industry_id" onchange="this.form.submit()">
+                    <option value="">全部行业</option>
+                    {% for ind in industries %}
+                    <option value="{{ ind.id }}" {% if ind.id == selected_industry %}selected{% endif %}>
+                        {{ ind.icon }} {{ ind.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="col-md-3">
+                <label class="form-label mb-1 small">状态筛选</label>
+                <select class="form-select form-select-sm" name="status" onchange="this.form.submit()">
+                    <option value="">全部状态</option>
+                    <option value="approved" {% if selected_status == 'approved' %}selected{% endif %}>✅ 已确认入库</option>
+                    <option value="modified" {% if selected_status == 'modified' %}selected{% endif %}>✏️ 修改后入库</option>
+                    <option value="rejected" {% if selected_status == 'rejected' %}selected{% endif %}>❌ 已拒绝</option>
+                </select>
+            </div>
+            <div class="col-auto ms-auto">
+                <a href="{{ url_for('learning.index') }}" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-clock-history"></i> 待审核列表
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 历史记录列表 -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        {% if records.items %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">时间</th>
+                        <th>买家原话</th>
+                        <th>AI回复</th>
+                        <th>审核状态</th>
+                        <th>审核人</th>
+                        <th>知识库ID</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in records.items %}
+                    <tr>
+                        <td class="ps-3">
+                            <small class="text-muted">
+                                {{ r.reviewed_at.strftime('%m-%d %H:%M') if r.reviewed_at else '-' }}
+                            </small>
+                            {% if r.industry %}
+                            <br><span class="badge bg-warning text-dark" style="font-size:0.7rem;">{{ r.industry.icon }} {{ r.industry.name }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div style="max-width:200px;" class="text-truncate" title="{{ r.buyer_message }}">
+                                {{ r.buyer_message[:60] }}{% if r.buyer_message|length > 60 %}...{% endif %}
+                            </div>
+                            <small class="text-muted">来源: {{ r.process_by }}</small>
+                        </td>
+                        <td>
+                            <div style="max-width:200px;" class="text-truncate text-muted small"
+                                 title="{{ r.correct_answer or r.ai_reply }}">
+                                {{ (r.correct_answer or r.ai_reply)[:60] }}...
+                            </div>
+                        </td>
+                        <td>
+                            {% if r.review_status == 'approved' %}
+                            <span class="badge bg-success">✅ 已确认入库</span>
+                            {% elif r.review_status == 'modified' %}
+                            <span class="badge bg-warning text-dark">✏️ 修改后入库</span>
+                            {% elif r.review_status == 'rejected' %}
+                            <span class="badge bg-danger">❌ 已拒绝</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small>{{ r.reviewed_by or '-' }}</small>
+                        </td>
+                        <td>
+                            {% if r.kb_item_id %}
+                            <a href="{{ url_for('knowledge.edit', item_id=r.kb_item_id) }}"
+                               class="badge bg-info text-decoration-none">#{{ r.kb_item_id }}</a>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分页 -->
+        {% if records.pages > 1 %}
+        <div class="d-flex justify-content-center py-3">
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if records.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ records.prev_num }}{% if selected_industry %}&industry_id={{ selected_industry }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">上一页</a>
+                    </li>
+                    {% endif %}
+                    <li class="page-item active"><a class="page-link">{{ records.page }}/{{ records.pages }}</a></li>
+                    {% if records.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ records.next_num }}{% if selected_industry %}&industry_id={{ selected_industry }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">下一页</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-clock-history fs-1"></i>
+            <p class="mt-2">暂无审核历史记录</p>
+            <a href="{{ url_for('learning.index') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-mortarboard"></i> 去审核
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

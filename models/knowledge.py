@@ -43,6 +43,15 @@ class KnowledgeBase(db.Model):
     # 是否启用
     is_active = db.Column(db.Boolean, default=True)
 
+    # 来源：manual（手动添加）/ ai_learning（学习中心审核）/ ai_generated（AI批量生成）
+    source = db.Column(db.String(30), default='manual')
+
+    # 是否已同步到MaxKB向量库
+    maxkb_synced = db.Column(db.Boolean, default=False)
+
+    # 最后同步到MaxKB的时间
+    maxkb_synced_at = db.Column(db.DateTime, nullable=True)
+
     # 创建时间（北京时间）
     created_at = db.Column(db.DateTime, default=get_beijing_time)
 
@@ -77,6 +86,9 @@ class KnowledgeBase(db.Model):
             'priority': self.priority,
             'hit_count': self.hit_count,
             'is_active': self.is_active,
+            'source': self.source,
+            'maxkb_synced': self.maxkb_synced,
+            'maxkb_synced_at': self.maxkb_synced_at.strftime('%Y-%m-%d %H:%M') if self.maxkb_synced_at else '',
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
         }
 

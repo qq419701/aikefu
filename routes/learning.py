@@ -149,7 +149,11 @@ def approve(record_id):
     if config.MAXKB_ENABLED and maxkb_sync:
         try:
             from modules.maxkb_client import MaxKBClient
-            MaxKBClient().upsert(kb_item.id, kb_item.question, kb_item.answer, kb_item.keywords or '')
+            ok = MaxKBClient().upsert(kb_item.id, kb_item.question, kb_item.answer, kb_item.keywords or '')
+            if ok:
+                kb_item.maxkb_synced = True
+                kb_item.maxkb_synced_at = get_beijing_time()
+                db.session.commit()
         except Exception as e:
             logger.warning(f"[学习中心] approve MaxKB同步失败: {e}")
 
@@ -199,7 +203,11 @@ def modify(record_id):
             if config.MAXKB_ENABLED and SystemConfig.get('learning_maxkb_sync', True):
                 try:
                     from modules.maxkb_client import MaxKBClient
-                    MaxKBClient().upsert(existing.id, existing.question, existing.answer, existing.keywords or '')
+                    ok = MaxKBClient().upsert(existing.id, existing.question, existing.answer, existing.keywords or '')
+                    if ok:
+                        existing.maxkb_synced = True
+                        existing.maxkb_synced_at = get_beijing_time()
+                        db.session.commit()
                 except Exception as e:
                     logger.warning(f"[学习中心] modify MaxKB同步失败: {e}")
             flash('已修改并覆盖已有知识库条目，正确答案已更新', 'success')
@@ -231,7 +239,11 @@ def modify(record_id):
     if config.MAXKB_ENABLED and maxkb_sync:
         try:
             from modules.maxkb_client import MaxKBClient
-            MaxKBClient().upsert(kb_item.id, kb_item.question, kb_item.answer, kb_item.keywords or '')
+            ok = MaxKBClient().upsert(kb_item.id, kb_item.question, kb_item.answer, kb_item.keywords or '')
+            if ok:
+                kb_item.maxkb_synced = True
+                kb_item.maxkb_synced_at = get_beijing_time()
+                db.session.commit()
         except Exception as e:
             logger.warning(f"[学习中心] modify MaxKB同步失败: {e}")
 
@@ -259,6 +271,62 @@ def reject(record_id):
 
     flash('已标记为不入库', 'info')
     return redirect(url_for('learning.index', industry_id=record.industry_id))
+
+
+@learning_bp.route('/api/pending-count')
+@login_required
+def api_pending_count():
+    """
+    获取待审核记录数量（用于侧边栏角标实时更新）
+    返回：{"count": N}
+    """
+    query = LearningRecord.query.filter_by(review_status='pending')
+    if not current_user.is_admin():
+        query = query.filter_by(industry_id=current_user.industry_id)
+    count = query.count()
+    return jsonify({'count': count})
+
+
+@learning_bp.route('/history')
+@login_required
+def history():
+    """
+    审核历史Tab：显示已审核（approved/modified/rejected）记录
+    支持按行业和状态筛选，分页展示
+    """
+    industry_id = request.args.get('industry_id', type=int)
+    status_filter = request.args.get('status', '')
+    page = request.args.get('page', 1, type=int)
+
+    if current_user.is_admin():
+        industries = Industry.query.filter_by(is_active=True).all()
+    else:
+        industries = Industry.query.filter_by(
+            id=current_user.industry_id, is_active=True
+        ).all()
+        if not industry_id:
+            industry_id = current_user.industry_id
+
+    query = LearningRecord.query.filter(
+        LearningRecord.review_status.in_(['approved', 'modified', 'rejected'])
+    )
+    if industry_id:
+        query = query.filter_by(industry_id=industry_id)
+    elif not current_user.is_admin():
+        query = query.filter_by(industry_id=current_user.industry_id)
+    if status_filter in ('approved', 'modified', 'rejected'):
+        query = query.filter_by(review_status=status_filter)
+
+    records = query.order_by(LearningRecord.reviewed_at.desc()).paginate(
+        page=page, per_page=20
+    )
+
+    return render_template('learning/history.html',
+        records=records,
+        industries=industries,
+        selected_industry=industry_id,
+        selected_status=status_filter,
+    )
 
 
 @learning_bp.route('/generate', methods=['POST'])
@@ -393,7 +461,10 @@ def _approve_record(record, answer: str, status: str, maxkb_sync: bool, dedup_en
     if config.MAXKB_ENABLED and maxkb_sync:
         try:
             from modules.maxkb_client import MaxKBClient
-            MaxKBClient().upsert(kb_item.id, kb_item.question, kb_item.answer, '')
+            ok = MaxKBClient().upsert(kb_item.id, kb_item.question, kb_item.answer, '')
+            if ok:
+                kb_item.maxkb_synced = True
+                kb_item.maxkb_synced_at = get_beijing_time()
         except Exception as e:
             logger.warning(f"[学习中心] 批量审核MaxKB同步失败: {e}")
 

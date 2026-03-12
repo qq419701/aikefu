@@ -190,6 +190,99 @@ class MaxKBClient:
             logger.error(f"[MaxKB] 检索异常: {e}")
             return None
 
+    def health_check(self) -> bool:
+        """
+        连接健康检测
+        功能：检测MaxKB服务是否可连接（routes/settings.py已调用此方法）
+        返回：True=连通，False=断开或未配置
+        """
+        if not self.enabled:
+            return False
+
+        if not self.api_key or not self.dataset_id:
+            return False
+
+        try:
+            url = f"{self.api_url}/api/dataset/{self.dataset_id}"
+            response = requests.get(url, headers=self.headers, timeout=self.timeout)
+            return response.status_code in (200, 201)
+        except Exception as e:
+            logger.warning(f"[MaxKB] health_check失败: {e}")
+            return False
+
+    def list_documents(self, page: int = 1, page_size: int = 100) -> dict:
+        """
+        列出MaxKB中的文档列表，用于同步状态面板
+        返回：{'total': N, 'documents': [{'name': 'kb_123', ...}]}
+        """
+        if not self.enabled or not self.api_key or not self.dataset_id:
+            return {'total': 0, 'documents': []}
+
+        try:
+            url = f"{self.api_url}/api/dataset/{self.dataset_id}/document"
+            params = {'page': page, 'page_size': page_size}
+            response = requests.get(url, headers=self.headers, params=params,
+                                    timeout=self.timeout)
+            if response.status_code == 200:
+                data = response.json()
+                docs = data.get('data', data.get('documents', []))
+                total = data.get('total', len(docs))
+                return {'total': total, 'documents': docs}
+        except Exception as e:
+            logger.warning(f"[MaxKB] list_documents失败: {e}")
+        return {'total': 0, 'documents': []}
+
+    def search_similar(self, question: str, top_k: int = 3) -> list:
+        """
+        语义相似搜索，用于入库前查重（语义级别）
+        返回：[{'question': ..., 'score': 0.9, 'kb_id': 1}]
+        """
+        if not self.enabled or not self.api_key or not self.dataset_id:
+            return []
+
+        try:
+            url = f"{self.api_url}/api/dataset/{self.dataset_id}/search"
+            payload = {'query': question, 'top_k': top_k}
+            response = requests.post(url, json=payload, headers=self.headers,
+                                     timeout=self.timeout)
+            if response.status_code != 200:
+                return []
+
+            data = response.json()
+            results = data.get('results') or data.get('data') or []
+            similar = []
+            for r in results:
+                score = float(r.get('score', 0))
+                meta = r.get('meta', {}) or {}
+                similar.append({
+                    'question': r.get('content', ''),
+                    'score': score,
+                    'kb_id': meta.get('kb_id'),
+                })
+            return similar
+        except Exception as e:
+            logger.warning(f"[MaxKB] search_similar失败: {e}")
+            return []
+
+    def get_stats(self) -> dict:
+        """
+        获取MaxKB数据集统计，用于管理面板
+        返回：{'total_docs': N, 'dataset_id': ..., 'connected': True}
+        """
+        if not self.enabled or not self.api_key or not self.dataset_id:
+            return {'total_docs': 0, 'dataset_id': self.dataset_id, 'connected': False}
+
+        try:
+            result = self.list_documents(page=1, page_size=1)
+            return {
+                'total_docs': result['total'],
+                'dataset_id': self.dataset_id,
+                'connected': True,
+            }
+        except Exception as e:
+            logger.warning(f"[MaxKB] get_stats失败: {e}")
+            return {'total_docs': 0, 'dataset_id': self.dataset_id, 'connected': False}
+
     def sync_all(self, industry_id: int, items: list) -> dict:
         """
         全量同步某行业的知识库到MaxKB

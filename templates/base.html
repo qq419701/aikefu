@@ -360,6 +360,26 @@ function updatePendingBadge() {
 setInterval(updatePendingBadge, 30000);
 updatePendingBadge();
 
+// 定时获取学习中心待审核数量（角标）
+function updateLearningBadge() {
+    fetch('/learning/api/pending-count')
+        .then(r => r.json())
+        .then(data => {
+            var badge = document.getElementById('learning-badge');
+            if (badge) {
+                if (data.count > 0) {
+                    badge.textContent = data.count;
+                    badge.style.display = '';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        })
+        .catch(function(){});
+}
+setInterval(updateLearningBadge, 30000);
+updateLearningBadge();
+
 // 定时获取风险数据（黑名单等级提醒）
 function updateRiskBadges() {
     fetch('/risk/api/summary')
